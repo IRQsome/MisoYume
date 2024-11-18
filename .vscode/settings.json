@@ -1,0 +1,7 @@
+{
+    "[spin2]": {
+        "editor.useTabStops": false,
+        "editor.detectIndentation": false,
+        "editor.tabSize": 2,
+    }
+}

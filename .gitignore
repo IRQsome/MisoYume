@@ -1,0 +1,11 @@
+*.binary
+*.lst
+*.p2asm
+*.bin
+log*.txt
+*.log
+crust/**
+alt/**
+*.zip
+*.exe
+vfs/**

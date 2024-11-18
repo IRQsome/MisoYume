@@ -1,0 +1,1600 @@
+'' MisoYume - Souper NES emulator
+'' [beta version]
+
+BETAVER = 06
+
+#include "commondef.spin2"
+#include "config.spin2"
+
+CON
+
+MAX_PATH = 255
+
+DIRENT_MAX = 4000
+
+EXRAM_MAX = 8*1024*1024
+
+HEAPSIZE = 1024*8
+
+VRAM_BASE = $1_0000
+RKRAM_BASE = $2_0000
+SPRAM_BASE = $4_0000
+NVRAM_BASE = $5_0000
+PPUREGS = $40
+
+
+
+MENUKEY_UP    = %0000_0001
+MENUKEY_DOWN  = %0000_0010
+MENUKEY_LEFT  = %0000_0100
+MENUKEY_RIGHT = %0000_1000
+
+MENUKEYS_DIRECTIONS = %1111
+
+MENUKEY_CONFIRM = %0001_0000
+MENUKEY_BACK    = %0010_0000
+
+MENUKEY_PGUP   = %0100_0000
+MENUKEY_PGDOWN = %1000_0000
+
+ATTR_TRAN = 0
+ATTR_BLACK = 256
+ATTR_SELECT = 256 + 1<<10
+ATTR_DIAG = 256 + 2<<10
+
+OBJ
+
+video: "MegaVGA_ohmyshit"
+
+usb : "usbnew" | ACTIVITY_LED = -1, ERROR_LED = -1, USB_BASE_PIN = USB0_BASEPIN, USB_ENABLE_OFFSET = ENABLE_PIN, USB_DMINUS_OFFSET = DM_PIN, ...
+                 OVERLAP_MEMORY = true,  ...
+                 EMUPAD_MAX_PLAYER = 8, EMUPAD_BUILTIN_RULES = false, ...
+                 EMUPAD_TYPE_KBD = 1, EMUPAD_TYPE_PAD = 1, ...
+                 EMUPAD_UP_BIT = 4,EMUPAD_DOWN_BIT = 5,EMUPAD_LEFT_BIT = 6,EMUPAD_RIGHT_BIT = 7, ...
+                 EMUPAD_BT0_BIT = 9, EMUPAD_BT1_BIT = 8, EMUPAD_BT2_BIT = 0, EMUPAD_BT3_BIT = 1, ...
+                 EMUPAD_BT4_BIT = 10, EMUPAD_BT5_BIT = 11, EMUPAD_BT6_BIT = -1, EMUPAD_BT7_BIT = -1, ...
+                 EMUPAD_BT8_BIT = 2, EMUPAD_BT9_BIT = 3
+
+padmap: "padmap_parser"
+
+c : "libc"
+a : "fsadapter.c"
+
+#ifdef USE_PSRAM4
+exmem : "psram4drv-dualCE.spin2"
+#endif
+#ifdef USE_PSRAM8
+exmem : "psram8drv.spin2"
+#endif
+#ifdef USE_PSRAM16
+exmem : "psram16drv.spin2"
+#endif
+#ifdef USE_HYPER
+exmem : "hyperdrv.spin2"
+#endif
+
+VAR
+
+long exmem_mailbox[8*3]
+
+long exmem_struct
+
+long romfile,romsize
+
+long srmfile,savesize
+
+long selection
+
+byte romheader,rommapper
+
+byte ppr_cog,ppc_cog,ppm_cog,cpu_cog,exmem_cog,spc_cog
+byte got_parameter,sram_is_nvram
+
+byte romheader_buffer[80]
+
+
+alignl
+long repeatkey,repeatnext
+
+alignl
+byte curdir[MAX_PATH+1],tmppath[MAX_PATH+1]
+
+
+PUB main() | tmp, i, j, selfile
+
+menu_ppu_init()
+msgbox_simple(@"oomf")
+
+' setup video driver
+video.start($F8,$80000,long[$20],VIDEO_MODE,VGA_BASEPIN,VGA_VSYNC,VIDEO_SUBMODE)
+  ' MEGA HACK: MODE POINTER is $80000
+
+ppr_cog := coginit(COGEXEC_NEW,long[$24],0)
+ppc_cog := coginit(HUBEXEC_NEW,long[$28],0)
+ppm_cog := coginit(COGEXEC_NEW,long[$2C],0)
+spc_cog := coginit(HUBEXEC_NEW,long[$3C],$FFC0)
+
+_mount(@"/sd",c._vfs_open_sdcardx(SDCARD_CLK,SDCARD_SELECT,SDCARD_DI,SDCARD_DO))
+
+#ifdef INPUT_USE_USB
+usb.set_emupad_ptr($100)
+tmp := c.fopen(@"/sd/PADMAP.TXT",@"r")
+if tmp
+  padmap.parse(usb.get_emupad_rule_buffer(),usb.EMUPAD_MAX_RULES,@c.fgetc,tmp,@"megayume")
+  c.fclose(tmp)
+usb.start()
+waitms(500) ' This is here because oomfies
+#endif
+
+'print(0,0,@"A",0)
+'print(31,0,@"B",0)
+'print(0,31,@"C",0)
+'print(31,31,@"D",0)
+word[VRAM_BASE][(3<<5)+2] := 512
+word[VRAM_BASE][(3<<5)+3] := 513
+word[VRAM_BASE][(3<<5)+4] := 514
+word[VRAM_BASE][(3<<5)+5] := 515
+
+
+#ifndef DIRECT_BOOT
+if USE_ARGV && long[$FC000] == %"ARGv" && word[$FC004] <> 0
+  got_parameter := true
+  long[$FC000] := 0 ' Destroy signature
+else
+  'do_opening()
+#endif
+
+if a.get_type_for_path(@"/sd/MISOYUME")==1
+  c.strncpy(@curdir,@"/sd/MISOYUME/",MAX_PATH)
+else
+  c.strncpy(@curdir,@"/sd/",MAX_PATH)
+
+repeat
+  repeat
+#ifdef DIRECT_BOOT
+    c.strncpy(@tmppath,@DIRECT_BOOT,MAX_PATH)
+#else
+    if got_parameter
+      c.strncpy(@tmppath,$FC004,MAX_PATH)
+      got_parameter := false
+    elseifnot do_filechooser()
+      next
+#endif
+    'msgbox_simple(@tmppath)
+    'waitkey(MENUKEY_CONFIRM)
+    case a.get_type_for_path(@tmppath)
+      0:
+        msgbox_simple(@"Path not found?")
+        waitkey(MENUKEY_CONFIRM)
+        next
+      1:
+        c.strncpy(@curdir,@tmppath,MAX_PATH)
+        c.strncat(@curdir,@"/",MAX_PATH)
+        selection := 0
+        next ' go for another round
+      2:
+        'msgbox_simple(@"ROM ok?")
+        'waitkey(MENUKEY_CONFIRM)
+
+    if open_romfile(@tmppath) < 0
+      msgbox_simple(@"open error")
+      waitkey(MENUKEY_CONFIRM)
+      next
+
+    detect_rom()
+    exmem_start()
+    do_load_rom()
+
+    byte[$180] := encod(romsize-1) ' Set rom size limit for lower code
+    byte[$181] := encod(savesize-1)
+    byte[$182] := rommapper
+
+    ' remove extension from tmppath
+    tmp := strsize(@tmppath)
+    repeat while --tmp >= 0
+      case tmppath[tmp]
+        ".":
+          tmppath[tmp] := 0
+          quit
+        "/": quit
+    ' add SRM extnesion
+    c.strncat(@tmppath,@".SRM",MAX_PATH)
+
+    init_sram(@tmppath)
+
+    quit
+  run_emulator()
+  if srmfile
+    flush_sram()
+    c.fclose(srmfile\0)
+
+  menu_ppu_init()
+
+PRI run_emulator() | tmp,did_reset,did_pause,should_pause,inband_time,inband_which,inband_trig
+
+exmem_stop()
+waitms(500)
+bytefill(RKRAM_BASE,$FF,$20000) ' Fill 128K RAM with $FF
+bytefill(VRAM_BASE,$00,$10000) ' Fill 64K VRAM with $1337
+bytefill(SPRAM_BASE,$00,$10000)
+byte[$D4] := 0
+coginit(HUBEXEC+spc_cog,long[$3C],$FFC0) ' force reset SPCcog
+cpu_cog := coginit(HUBEXEC_NEW,long[$1C],0)
+
+repeat
+  if INBAND_RESET
+    tmp := long[$100]
+    if tmp.[usb.EMUPAD_UP_BIT] and tmp.[usb.EMUPAD_BT9_BIT] and 0 ' Up+Start (Reset) DISABLED FOR NOW
+      if inband_which <> 1
+        inband_which:=1
+        inband_time := getct()
+#ifndef DIRECT_BOOT
+    elseif tmp.[usb.EMUPAD_DOWN_BIT] and tmp.[usb.EMUPAD_BT9_BIT] ' Down+Start (Quit)
+      if inband_which <> 2
+        inband_which:=2
+        inband_time := getct()
+#endif
+    else
+      inband_which:=0
+
+  if inband_which<>0 and (getct()-inband_time) > (3*clkfreq)
+    inband_trig := inband_which\0
+  else
+    inband_trig := 0
+
+  tmp:=((usb.keystate(usb.KEY_LCTRL)||usb.keystate(usb.KEY_RCTRL)) and usb.keystate(usb.KEY_R)) or inband_trig == 1
+  if tmp and not did_reset
+    byte[$D4] := 255
+    'cogatn(decod cpu_cog)
+  did_reset:=tmp
+
+  tmp := usb.keystate(usb.KEY_PAUSE)
+  if tmp and not did_pause
+    should_pause := true
+  did_pause:=tmp
+  if should_pause and not did_reset
+    byte[$D4] ^= 1
+      'cogatn(decod cpu_cog)
+    should_pause := false
+
+  if ((usb.keystate(usb.KEY_LCTRL)||usb.keystate(usb.KEY_RCTRL)) and usb.keystate(usb.KEY_Esc)) or inband_trig == 2
+    quit
+
+  ' Autosave SRAM if last write was 3 seconds ago
+  if srmfile and long[$D0] and (getct() - long[$D0]) >= clkfreq*3
+    long[$D0] := 0 ' clear first, so if we get another write while we're busy, it will still be autosaved later
+    flush_sram()
+
+cogstop(cpu_cog)
+coginit(HUBEXEC+spc_cog,long[$3C],$FFC0) ' force reset SPCcog AGAIN
+
+CON
+
+INFO_X = 17
+INFO_Y = 6
+INFO_HEIGHT = 20
+
+DIRLIST_X = 1
+DIRLIST_Y = 5
+DIRLIST_HEIGHT = 21
+
+
+PRI do_filechooser() | keys,x,y,tmp,gotfiles,tmp2,attr,position,dirty
+
+settiles($0000,0,31,27,27," ")
+print(1,27,@"Accessing...",256)
+
+gotfiles := scandir()
+if gotfiles < 0
+  msgbox_simple(@"Directory error!!!")
+  waitkey(MENUKEY_CONFIRM)
+  return
+if c.strncmp(@curdir,@"/",MAX_PATH) ' don't add updir into root dir
+  fileenter(@"<go up>",0,gotfiles++)
+sortFiles(gotfiles)
+screen_reset()
+'longfill(VRAM_BASE+$2800,0,32*8)
+' TODO: current directory renderer
+'draw_shiftjis_string(@curdir,VRAM_BASE+$2800,1,2,32*2)
+'show_shiftjis_string($2800/32,32,DIRLIST_X,DIRLIST_Y-1,$0000)
+
+
+
+if selection +>= gotfiles
+  selection := 0
+  position := 0
+else
+  position := (selection - 2) <# (gotfiles - DIRLIST_HEIGHT) #> 0
+dirty := true
+repeatkey := 0
+
+repeat while poll_menukeys() & !MENUKEYS_DIRECTIONS
+  update_anim()
+
+repeat
+  if dirty\false
+    settiles($0000,14,31,4,4," "+ATTR_TRAN)
+    'longfill(VRAM_BASE+$3000,$1111_1111,INFO_HEIGHT*16*8)
+    repeat y from 0 to INFO_HEIGHT-1
+      'show_shiftjis_string($3000/32+y*16 + A<<11,16,INFO_X,INFO_Y+y,$0000)
+      settiles($0000,INFO_X,30,y+INFO_Y,y+INFO_Y," "+ATTR_BLACK)
+    if selection <= position
+      position := (selection-1) #> 0
+    if selection >= position+DIRLIST_HEIGHT-1
+      position := (selection-DIRLIST_HEIGHT+2) #> 0 <# gotfiles-DIRLIST_HEIGHT    
+    repeat y from DIRLIST_Y to DIRLIST_Y+DIRLIST_HEIGHT-1
+      tmp := y-DIRLIST_Y+position
+      attr := tmp == selection ? ATTR_SELECT : ATTR_BLACK
+      if tmp < gotfiles
+        tmp2:=RKRAM_BASE+tmp*12
+        settile($0000,DIRLIST_X,y," "+attr)
+        settile($0000,DIRLIST_X+1,y,byte[tmp2++]+256+attr)
+        repeat x from 2 to 9
+          settile($0000,DIRLIST_X+x,y,byte[tmp2++]+attr)
+        settile($0000,DIRLIST_X+10,y,(byte[tmp2] <> " "?".":" ")+attr)
+        repeat x from 11 to 13
+          settile($0000,DIRLIST_X+x,y,byte[tmp2++]+attr)
+          settile($0000,DIRLIST_X+14,y," "+attr)
+      else
+        settiles($0000,DIRLIST_X,DIRLIST_X+14,y,y," "+ATTR_BLACK)
+
+    ifnot gotfiles
+      ' Does this case ever actually happen anymore?
+      putstring(@"No Files...",18,4,$0000,ATTR_TRAN)
+    else
+      case byte[RKRAM_BASE+12*selection]
+        0:putstring(@"Go up",INFO_X,4,$0000,ATTR_TRAN)
+        1:putstring(@"Folder",INFO_X,4,$0000,ATTR_TRAN)
+        2:
+          putstring(@"ROM info:",INFO_X,4,$0000,ATTR_TRAN)
+          c.strncpy(@tmppath,@curdir,MAX_PATH-12)
+          filegetname(@tmppath+strsize(@tmppath),selection)
+          if open_romfile(@tmppath) < 0
+            'draw_shiftjis_string(@"ＯＰＥＮ　ＥＲＲＯＲ？？？",VRAM_BASE+$3000+0*16*32,1,2,32)
+          else
+            'rom_read_block(RKRAM_BASE+$C000)
+            detect_rom()
+            c.sprintf(@tmppath,@"Size: %d",romsize)
+            putstring(@tmppath,INFO_X,INFO_Y+0,$0000,ATTR_BLACK)
+            putstring(romheader ? @"Has Header" : @"No Header",INFO_X,INFO_Y+1,$0000,ATTR_BLACK)
+
+            case rommapper
+              MAPPER_LOROM, MAPPER_LOROM_NVRAM:
+                c.strncpy(@tmppath,@"LoROM",MAX_PATH)
+              MAPPER_HIROM, MAPPER_HIROM_NVRAM:
+                c.strncpy(@tmppath,@"HiROM",MAX_PATH)
+              MAPPER_EXHIROM, MAPPER_EXHIROM_NVRAM:
+                c.strncpy(@tmppath,@"ExHiROM",MAX_PATH)
+              other:
+                c.strncpy(@tmppath,@"???",MAX_PATH)
+            case rommapper
+              MAPPER_LOROM_NVRAM,MAPPER_HIROM_NVRAM,MAPPER_EXHIROM_NVRAM:
+                c.strncat(@tmppath,sram_is_nvram?@"+NVRAM":@"+RAM",MAX_PATH)
+
+            putstring(@tmppath,INFO_X,INFO_Y+2,$0000,ATTR_BLACK)
+
+            putstring(@"Title:",INFO_X,INFO_Y+3,$0000,ATTR_BLACK)
+            bytemove(@tmppath,@romheader_buffer[$10],14)
+            tmppath[14] := 0
+            putstring(@tmppath,INFO_X,INFO_Y+4,$0000,ATTR_BLACK)
+            bytemove(@tmppath,@romheader_buffer[$10+14],7)
+            tmppath[7] := 0
+            putstring(@tmppath,INFO_X,INFO_Y+5,$0000,ATTR_BLACK)
+
+
+  'settile($0000,0,0,"0"+ATTR_PAL2<<11)
+  keys := poll_menukeys()
+  if keys & MENUKEY_BACK
+    repeat while poll_menukeys() & MENUKEY_BACK
+      update_anim()
+    tmppath[0] := 0
+    return false
+  elseif keys & MENUKEY_CONFIRM and gotfiles
+    repeat while poll_menukeys() & MENUKEY_CONFIRM
+      update_anim()
+    c.strncpy(@tmppath,@curdir,MAX_PATH-12)
+    if byte[RKRAM_BASE+selection*12]==0 ' got directory up?
+      tmp := @tmppath+strsize(@tmppath)
+      tmp2 := 2
+      repeat while tmp >= @tmppath and tmp2
+        if byte[tmp] == "/"
+          tmp2--
+        byte[tmp--] := 0
+    else
+      filegetname(@tmppath+strsize(@tmppath),selection)
+    return true
+  else
+    update_anim()
+    tmp := selection
+    selection := handle_menu_move(keys,selection,gotfiles-1,DIRLIST_HEIGHT)
+    if tmp <> selection
+      dirty := 1
+
+PRI handle_menu_move(keys,current,max,pagelen) : r | tmp
+  tmp := 0
+  if ones(keys) <> 1
+    repeatkey := 0
+    return current
+  if repeatkey <> keys
+    repeatkey := keys
+    repeatnext := clkfreq+/2 + getct()
+    tmp := 1
+  elseif (getct()-repeatnext) >= 0
+    tmp := 1
+    repeatnext := clkfreq+/10 + getct()
+
+  ifnot tmp
+    return current
+
+  case encod keys
+    encod MENUKEY_UP:
+      return (current-1) #> 0
+    encod MENUKEY_DOWN:
+      return (current+1) <# max
+    encod MENUKEY_PGUP:
+      return (current-pagelen) #> 0
+    encod MENUKEY_PGDOWN:
+      return (current+pagelen) <# max
+    other:
+      return current
+
+
+PRI scandir() : got | dir,tmp,type
+
+c.strncpy(@tmppath,@curdir,MAX_PATH)
+'if c.strncmp(@curdir,@"/sd/",MAX_PATH) ' if not root, remove slash for opening directory (WTF??)
+'  tmppath[strsize(@tmppath)-1] := 0
+
+dir := c.opendir(@tmppath)
+ifnot dir
+  return -1
+
+repeat
+  tmp:= c.readdir(dir)
+  ifnot tmp
+    quit
+  ifnot type := a.get_type_for_dirent(tmp)
+    next
+  fileenter(a.get_name_for_dirent(tmp),type,got)
+  ifnot type == 1 or valid_rom_extension(got)
+    next
+  if ++got == DIRENT_MAX
+    quit
+
+
+c.closedir(dir)
+
+PRI fileenter(str,type,num) | pt
+
+pt := RKRAM_BASE+12*num
+byte[pt++] := type
+repeat 8
+  if byte[str] == 0 || byte[str] == "."
+    byte[pt++] := " "
+  else
+    byte[pt++] := byte[str++]
+if byte[str] == "."
+  str++
+repeat 3
+  if byte[str] == 0
+    byte[pt++] := " "
+  else
+    byte[pt++] := byte[str++]
+
+PRI valid_rom_extension(num) : r
+if check_extension(num,"S"+"F"<<8+"C"<<16)
+  return true
+if check_extension(num,"S"+"M"<<8+"C"<<16)
+return false
+
+PRI check_extension(num,ext) : r | tmp
+tmp := long[RKRAM_BASE+12*num+9]&$FFFFFF 
+return tmp==ext || tmp==(ext|$202020)
+
+PRI filegetname(dst,num) | pt
+pt := RKRAM_BASE+12*num+1
+repeat 8
+  if byte[pt] <> " "
+    byte[dst++] := byte[pt]
+  pt++
+if byte[pt] <> " "
+  byte[dst++] := "."
+  repeat 3
+    if byte[pt] <> " "
+      byte[dst++] := byte[pt]
+    pt++
+byte[dst] := 0
+
+PRI sortFiles(length) : i | ip,jp,i2p,zonep,k,realsize,subsize,sizze,temp
+'' Sort the Files...
+
+  temp := __builtin_alloca(12)
+
+
+  if length < 2                                              ' no need to sort if < 2 entries
+    return
+
+  '' Non-recursive in-place sorting algorithm
+  '' As relayed to me by a friendly Discord user
+  '' (ported to spin and optimized by me)
+  subsize := 12
+  length *= 12
+  repeat while subsize < length
+    sizze := subsize<<1
+    repeat i from 0 to length-12 step sizze
+      jp := (ip:=RKRAM_BASE+i)+subsize
+      realsize := sizze <# (length-i)
+      i2p := ip
+      repeat k from 0 to realsize-12 step 12
+        if jp => (ip+realsize) or i2p => jp
+          'pass
+        elseif compareNames(i2p,jp) =< 0
+          i2p += 12
+        else
+          zonep := jp
+          repeat
+            if (zonep+12) == (ip+realsize)
+              longmove(temp, i2p,3)
+              longmove(i2p,jp,3)
+              longmove(jp,jp+12,(zonep-jp)>>2)
+              longmove(zonep,temp,3)
+              if jp == zonep
+                i2p += 12
+              else
+                k -= 12
+              quit
+            elseif compareNames(zonep+12,i2p) > 0
+              longmove(temp, i2p,3)
+              longmove(i2p,jp,3)
+              longmove(jp,jp+12,(zonep-jp)>>2)
+              longmove(zonep,temp,3)
+              if jp == zonep
+                i2p += 12
+              else
+                k -= 12
+              quit
+            zonep += 12
+    subsize := sizze
+
+PRI compareNames(first,second) : result
+repeat 12
+  if result := byte[first++] - byte[second++]
+      return
+return 0
+
+PRI settile(plane,x,y,tile)
+word[VRAM_BASE+plane][y*32+x] := tile
+
+PRI settiles(plane,x1,x2,y1,y2,tile) | i
+if x2 >= x1 and y2 >= y1
+  plane += VRAM_BASE
+  repeat i from y1 to y2
+    wordfill(plane+(i<<5+x1)<<1,tile,x2-x1+1)
+ 
+PRI putstring(str,x,y,plane,attr) | c
+    repeat while c := byte[str++]
+        word[VRAM_BASE+plane][x+y*32] := c + attr
+        x := (x+1)&31
+
+PRI print(x,y,str,attr)
+  putstring(str,x,y,$0000,attr)
+
+CON
+MSGBOX_X = 3
+MSGBOX_Y = 12
+MSGBOX_WIDTH  = 26
+MSGBOX_HEIGHT = 5
+MSGBOX_X2 = MSGBOX_X+MSGBOX_WIDTH-1
+MSGBOX_Y2 = MSGBOX_Y+MSGBOX_HEIGHT-1
+
+PRI msgbox_simple(str)
+settiles($0000,MSGBOX_X,MSGBOX_X2,MSGBOX_Y,MSGBOX_Y2," "+ATTR_DIAG)
+settiles($0000,MSGBOX_X,MSGBOX_X2,MSGBOX_Y-1,MSGBOX_Y-1,$90+ATTR_DIAG)
+settiles($0000,MSGBOX_X,MSGBOX_X2,MSGBOX_Y2+1,MSGBOX_Y2+1,$90+ATTR_DIAG)
+settiles($0000,MSGBOX_X-1,MSGBOX_X-1,MSGBOX_Y,MSGBOX_Y2,$91+ATTR_DIAG)
+settiles($0000,MSGBOX_X2+1,MSGBOX_X2+1,MSGBOX_Y,MSGBOX_Y2,$91+ATTR_DIAG)
+settile($0000,MSGBOX_X-1,MSGBOX_Y-1,$9F+ATTR_DIAG)
+settile($0000,MSGBOX_X-1,MSGBOX_Y2+1,$9D+ATTR_DIAG)
+settile($0000,MSGBOX_X2+1,MSGBOX_Y-1,$9E+ATTR_DIAG)
+settile($0000,MSGBOX_X2+1,MSGBOX_Y2+1,$9C+ATTR_DIAG)
+putstring(str,MSGBOX_X+1,MSGBOX_Y+1,$0000,ATTR_DIAG)
+'repeat
+
+'print(0,27,string("                                "),0)
+'settiles($0000,0,31,27,27," ")
+'print(1,27,str,256)
+
+PRI open_romfile(name) : r
+if romfile
+  c.fclose(romfile)
+romfile := c.fopen(name,@"rb")
+ifnot romfile
+  return -1
+
+return 0
+
+PRI detect_rom() | maptype, score_lo, score_hi, score_exhi, tmp, haveram, havebatt
+c.fseek(romfile,0,c.SEEK_END)
+romsize := c.ftell(romfile)
+if romsize & 512
+  romsize -= 512
+  romheader := 1
+else
+  romheader := 0
+  
+if romsize > $7FFF
+  c.fseek(romfile,$7FB0+(romheader?512:0),c.SEEK_SET)
+  c.fread(@romheader_buffer,80,1,romfile)
+  score_lo := score_header(@romheader_buffer,$20)
+if romsize > $FFFF
+  c.fseek(romfile,$FFB0+(romheader?512:0),c.SEEK_SET)
+  c.fread(@romheader_buffer,80,1,romfile)
+  score_hi := score_header(@romheader_buffer,$21)
+if romsize > $40FFFF
+  c.fseek(romfile,$40FFB0+(romheader?512:0),c.SEEK_SET)
+  c.fread(@romheader_buffer,80,1,romfile)
+  score_exhi := score_header(@romheader_buffer,$25)
+
+maptype := 0 ' assume LoROM
+tmp := score_lo
+if score_hi >= tmp
+  maptype := 1
+  tmp := score_hi
+if score_exhi >= tmp
+  maptype := 2
+  tmp := score_exhi
+
+{
+print(1,3,lookupz(maptype : @"LoROM", @"HiROM", @"ExHiROM"),0)
+tmp := __builtin_alloca(256)
+c.sprintf(tmp,@"  LoROM score: %d",score_lo)
+print(1,5,tmp,0)
+c.sprintf(tmp,@"  HiROM score: %d",score_hi)
+print(1,6,tmp,0)
+c.sprintf(tmp,@"ExHiROM score: %d",score_exhi)
+print(1,7,tmp,0)
+
+c.sprintf(tmp,@"%08X",lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(romheader?512:0))
+print(1,8,tmp,0)
+}
+
+' okay, load back actual header
+c.fseek(romfile,lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(romheader?512:0),c.SEEK_SET)
+c.fread(@romheader_buffer,80,1,romfile)
+
+{
+c.sprintf(tmp,@"Map: $%02X Chipset: $%02X",romheader_buffer[$25],romheader_buffer[$26])
+print(1,9,tmp,0)
+c.sprintf(tmp,@"ROM zx: %2d RAM zx: %2d",encod(romsize-1),romheader_buffer[$28]+9)
+print(1,10,tmp,0)
+}
+
+haveram  := (%0110110 >> (romheader_buffer[$26]&$F)) & 1
+havebatt := (%0100100 >> (romheader_buffer[$26]&$F)) & 1
+
+if haveram
+  savesize := decod(romheader_buffer[$28] + 10)
+  savesize <#= 32768
+else
+  savesize := 0
+
+sram_is_nvram := haveram && havebatt
+
+{
+c.sprintf(tmp,@"savesize: %d",savesize)
+print(1,11,tmp,0)
+}
+
+' set fine-grained mapper
+case maptype
+  0: ' LoROM
+    if haveram
+      rommapper := MAPPER_LOROM_NVRAM
+    else
+      rommapper := MAPPER_LOROM
+  1: ' HiROM
+    if haveram
+      rommapper := MAPPER_HIROM_NVRAM
+    else
+      rommapper := MAPPER_HIROM
+  2: ' ExHiROM
+    if haveram
+      rommapper := MAPPER_EXHIROM_NVRAM
+    else
+      rommapper := MAPPER_EXHIROM
+
+
+'' Heurestic to discover valid ROM header (and by extension map mode)
+'' ptr is to 80 byte ROM header that should show up at $FFB0
+PRI score_header(ptr,expected_map) : score | i
+score := 1 ' One point for actually existing
+
+ ' Reset vector points into ROM? (always true)
+if word[ptr+$4C] >= $8000 && word[ptr+$4C] < $FFC0
+  score += 20
+
+' Checksum and compliment match (may not be true for hacks)
+if word[ptr+$2C] == (word[ptr+$2E]^$FFFF)
+  score += 5
+
+' ROM size matches file size
+if byte[ptr+$27] == encod(romsize-1)-9
+  score += 5
+
+' Map mode matches header location
+if byte[ptr+$25]&$EF == expected_map
+  score += 7
+
+' Game title is valid ASCII?
+score += 5
+repeat i from $10 to $23
+  ifnot byte[ptr+i] >= " " && byte[ptr+i] <= "~"
+    score -= 5
+    quit
+
+PRI do_load_rom() | loadptr, loadsize, mirrorsize, x
+msgbox_simple(@"Loading ROM...")
+'' TODO verify that this actually works for all mirroring etc
+loadptr := 0
+loadsize := romsize
+c.fseek(romfile,romheader?512:0,c.SEEK_SET)
+mirrorsize := decod(encod(loadsize-1)+1)
+repeat mirrorsize >> 15
+  update_bar(loadptr,mirrorsize)
+  if loadsize <= 0
+    loadsize := decod(encod(mirrorsize-loadptr))
+    c.fseek(romfile,loadsize*2 + (romheader?512:0),c.SEEK_SET)
+    'c.printf(string("seeking %08X",10),loadsize*2 + (romheader?512:0))
+  c.fread(RKRAM_BASE,32768,1,romfile)
+  exmem_write(loadptr,RKRAM_BASE,32768,false)
+  'c.printf(string("%08X %08X",10),loadptr,loadsize)
+  loadptr += 32768
+  loadsize -= 32768
+update_bar(loadptr,mirrorsize)
+
+PRI update_bar(ptr,mirrorsize) : x
+x := (((ptr*23)/mirrorsize)&posx) <# 23
+settiles($0000,4,4+x,14,14,514)
+settiles($0000,4+x+1,4+23,14,14," "+ATTR_BLACK)
+update_anim()
+
+PRI init_sram(srmpath) | open_existing
+
+bytefill(NVRAM_BASE,$FF,$8000)
+if srmfile
+  msgbox_simple(@"srmfile leak?")
+  waitkey(MENUKEY_CONFIRM)
+  c.fclose(srmfile\0)
+
+if sram_is_nvram
+  open_existing := a.exists(srmpath)
+  if open_existing
+    srmfile := c.fopen(srmpath,@"r+b")
+    ifnot srmfile
+      msgbox_simple(@"Failed to open save file!")
+      waitkey(MENUKEY_CONFIRM)
+    else
+      c.fread(NVRAM_BASE,1,savesize,srmfile)
+      msgbox_simple(@"Save open OK!")
+      waitkey(MENUKEY_CONFIRM)
+  else
+    srmfile := c.fopen(srmpath,@"w+b")
+    ifnot srmfile
+      msgbox_simple(@"Failed to create save file!")
+      waitkey(MENUKEY_CONFIRM)
+    else
+      c.fwrite(NVRAM_BASE,1,savesize,srmfile)
+      msgbox_simple(@"Save create OK!")
+      waitkey(MENUKEY_CONFIRM)
+
+PRI flush_sram()
+c.fseek(srmfile,0,c.SEEK_SET)
+c.fwrite(NVRAM_BASE,1,savesize,srmfile)
+c.fflush(srmfile)
+
+PRI screen_reset() | tmp
+wordfill(VRAM_BASE,$20,32*32)
+tmp := __builtin_alloca(40)
+c.sprintf(tmp,@"BETA %02d",BETAVER)
+print(1,2,tmp,ATTR_TRAN)
+update_anim()
+' draw soup bowl
+word[VRAM_BASE][1<<5+BOWL_X+0] := $304 + 7<<10
+word[VRAM_BASE][1<<5+BOWL_X+1] := $300 + 7<<10
+word[VRAM_BASE][1<<5+BOWL_X+2] := $301 + 7<<10
+word[VRAM_BASE][1<<5+BOWL_X+3] := $304 + 7<<10 + $4000
+
+word[VRAM_BASE][2<<5+BOWL_X+0] := $305 + 7<<10
+word[VRAM_BASE][2<<5+BOWL_X+1] := $302 + 7<<10
+word[VRAM_BASE][2<<5+BOWL_X+2] := $303 + 7<<10
+word[VRAM_BASE][2<<5+BOWL_X+3] := $305 + 7<<10 + $4000
+
+word[VRAM_BASE][0<<5+BOWL_X+2] := $306 + 7<<10
+
+
+
+PRI menu_ppu_init() | tmp,i,j
+
+byte[PPUREGS+$08] := $01 ' BGMODE
+byte[PPUREGS+$09] := $00 ' SETINI
+byte[PPUREGS+$0A] := $00 ' MOSAIC
+
+word[PPUREGS+$04] := $10_02 ' CGADSUB / CGWSEL
+byte[PPUREGS+$06] := $0F ' INIDISP
+
+long[PPUREGS+$18] := $00_01_00_11 ' BG1 on both, sprites only on main
+long[PPUREGS+$1C] := $00_00_00_00 ' Nametable bases/sizes
+word[PPUREGS+$20] := $1111 ' Tileset bases
+
+word[PPUREGS+$24] := $0000 ' BG1HOFS
+word[PPUREGS+$26] := $0000 ' BG1VOFS
+
+
+
+long[long[$30]][0] := $484848_00 ' backdrop color
+long[PPUREGS+$00] := $484848_00 ' fixed color
+
+byte[PPUREGS+$37] := $03 ' OBJSEL
+
+' init OAM
+repeat i from 0 to 127
+  setsprite(i,384,0,0,0)
+
+' load font
+repeat i from 0 to 255
+    repeat j from 0 to 7
+        tmp := __builtin_movbyts(testfont.byte[i*8+j] rev 7,%%0000)
+        word[VRAM_BASE+1*8192+(i+0)*32][j] := tmp
+        word[VRAM_BASE+1*8192+(i+0)*32][j+8] := tmp
+        word[VRAM_BASE+1*8192+(i+256)*32][j] := tmp| $FF
+        word[VRAM_BASE+1*8192+(i+256)*32][j+8] := tmp
+' load icons
+repeat i from 0 to 3
+    conv4bpp(VRAM_BASE+1*8192+(i+512)*32,@dirup_icon+i*32)
+repeat i from 0 to 7
+    conv4bpp(VRAM_BASE+1*8192+(i+768)*32,@bowltiles+i*32)
+
+' load sprites
+repeat i from 0 to 15
+    conv4bpp(VRAM_BASE+3*16384+(i+0)*32,@logotiles_row1+i*32)
+repeat i from 0 to 15
+    conv4bpp(VRAM_BASE+3*16384+(i+16)*32,@logotiles_row2+i*32)
+
+
+long[long[$30]][1] := $000000_00
+longmove(@long[long[$30]][2],@mainpal,14)
+long[long[$30]][17] := $B068B0_00
+longmove(@long[long[$30]][18],@mainpal,14)
+long[long[$30]][33] := $383838_00
+longmove(@long[long[$30]][34],@mainpal,14)
+
+longmove(@long[long[$30]][129],@logopal1,15)
+longmove(@long[long[$30]][113],@logopal2,15)
+longmove(@long[long[$30]][145],@logopal2,15)
+' A mathable sprite palette
+repeat i from 0 to 15
+  long[long[$30]][192+i] := __builtin_movbyts(i<<3,%%0003)
+
+'long[long[$30]][33] := $F80000_00
+'long[long[$30]][65] := $00F800_00
+'long[long[$30]][97] := $0000F8_00
+screen_reset()
+
+PRI conv4bpp(dst,src) | tmp,j
+repeat 8 : j
+  tmp := __builtin_splitb(long[src][j])
+  word[dst][j] := tmp
+  word[dst][j+8] := tmp>>16
+
+
+PRI setsprite(i,x,y,tile,attr) | tmp
+  tmp := long[$38]+i*6
+  byte[tmp++] := x.[8] + (attr.[0]<<1)
+  byte[tmp++] := 0
+  byte[tmp++] := tile
+  byte[tmp++] := attr&$FE | tile.[8]
+  byte[tmp++] := x
+  byte[tmp++] := y
+
+CON
+  LOGO_X = 9*8+4
+  BOWL_X = 21
+
+PRI update_anim() | x,y,spr,tmp
+  spr := 0
+  if last_anim_frame && last_anim_frame == long[$FC]
+    return
+  last_anim_frame := long[$FC]
+
+  tmp := last_anim_frame
+
+
+  ' M
+  x,y := LOGO_X,8
+  if tmp.[8..4] == $8
+    y -= 1
+  setsprite(spr++,x+0,y+0,$00,$31)
+  setsprite(spr++,x+16,y+0,$02,$30)
+  setsprite(spr++,x+16,y+8,$12,$30)
+
+  ' I
+  x,y := LOGO_X+18,8
+  if tmp.[8..4] == $A
+    y -= 1
+  setsprite(spr++,x+0,y+0,$03,$30)
+  setsprite(spr++,x+0,y+8,$13,$30)
+
+  ' S
+  x,y := LOGO_X+22,8
+  if tmp.[8..4] == $C
+    y -= 1
+  setsprite(spr++,x+0,y+0,$04,$31)
+
+  ' O
+  x,y := LOGO_X+33,8
+  if tmp.[8..4] == $E
+    y -= 1
+  setsprite(spr++,x+0,y+0,$06,$31)
+
+  ' Y
+  x,y := LOGO_X+48,8
+  setsprite(spr++,x+0,y+0,$08,$33)
+
+  ' U
+  x,y := LOGO_X+61,8
+  setsprite(spr++,x+0,y+0,$0A,$33)
+
+  ' M
+  x,y := LOGO_X+73,8
+  setsprite(spr++,x+0,y+0,$0C,$33)
+
+  ' E
+  x,y := LOGO_X+87,8
+  setsprite(spr++,x+0,y+0,$0E,$33)
+
+  ' steam
+  x,y := (BOWL_X+1)*8,-1
+  setsprite(spr++,x+0,y+0,$20,$39)
+
+  ' animate steam
+  ifnot last_anim_frame&3
+    update_steam()
+
+PRI update_steam() | x,y,tmp,steamrow[2],windphase
+windphase := qcos(15,last_anim_frame&511,512)
+repeat x from 0 to 17
+  tmp := 64
+  tmp += qcos(96,last_anim_frame+x*51,811) #> -20
+  tmp += qcos(96,last_anim_frame+x*13,1000) #> -20
+  tmp += qsin(96,x,18*2)
+  tmp <#= 255
+  steambuffer[x+(17*18)] := ((getrnd()&255)*tmp+255)>>8
+  if x==0 || x==17
+    tmp >>= 1
+  steambuffer[x+(16*18)] := ((getrnd()&255)*tmp+255)>>8
+repeat y from 0 to 15
+  repeat x from 1 to 16
+    tmp := steambuffer[(x+0)+(y+1)*18]*35
+    tmp += steambuffer[(x-1)+(y+1)*18]*(21+windphase)
+    tmp += steambuffer[(x+1)+(y+1)*18]*(21-windphase)
+    tmp += steambuffer[(x+0)+(y+2)*18]*23
+    steambuffer[x+y*18] := (tmp>>7)<#255
+    tmp >>= 6
+    tmp += steamdither[(x&3)+(y&3)*4]
+    tmp <#= 255
+    asm
+    rolnib steamrow+1,steamrow+0,#7
+    rolnib steamrow+0,tmp,#1
+    endasm
+  steamrow[0] := __builtin_splitb(steamrow[0])
+  steamrow[1] := __builtin_splitb(steamrow[1])
+  word[VRAM_BASE+3*16384+(32+(y&8)<<1)*32][y&7] := steamrow[1]
+  word[VRAM_BASE+3*16384+(32+(y&8)<<1)*32][y&7+8] := steamrow[1]>>8
+  word[VRAM_BASE+3*16384+(33+(y&8)<<1)*32][y&7] := steamrow[0]
+  word[VRAM_BASE+3*16384+(33+(y&8)<<1)*32][y&7+8] := steamrow[0]>>8
+
+
+
+VAR
+  long last_anim_frame
+  byte steambuffer[18*18]
+
+DAT
+steamdither
+  byte 0,14,3,13
+  byte 11,5,8,6
+  byte 12,2,15,1
+  byte 7,9,4,10
+  
+
+
+PRI waitkey(key)
+repeat until poll_menukeys() & key
+  update_anim()
+repeat while poll_menukeys() & key
+  update_anim()
+
+PRI poll_menukeys() : keys | pad
+
+pad := long[$100]
+
+if {usb.keystate(usb.KEY_UP) or} pad.[usb.EMUPAD_UP_BIT]
+  keys |= MENUKEY_UP
+if {usb.keystate(usb.KEY_DOWN) or} pad.[usb.EMUPAD_DOWN_BIT]
+  keys |= MENUKEY_DOWN
+if {usb.keystate(usb.KEY_LEFT) or} pad.[usb.EMUPAD_LEFT_BIT]
+  keys |= MENUKEY_LEFT
+if {usb.keystate(usb.KEY_RIGHT) or} pad.[usb.EMUPAD_RIGHT_BIT]
+  keys |= MENUKEY_RIGHT
+
+if usb.keystate(usb.KEY_PAGEUP)
+  keys |= MENUKEY_PGUP
+if usb.keystate(usb.KEY_PAGEDOWN)
+  keys |= MENUKEY_PGDOWN
+
+if {usb.keystate(usb.KEY_Enter) or} pad.[usb.EMUPAD_BT9_BIT] or pad.[usb.EMUPAD_BT1_BIT] or pad.[usb.EMUPAD_BT3_BIT]
+  keys |= MENUKEY_CONFIRM
+if usb.keystate(usb.KEY_Esc) or {usb.keystate(usb.KEY_Bkspace) or} pad.[usb.EMUPAD_BT2_BIT]
+  keys |= MENUKEY_BACK
+
+CON
+#ifdef USE_PSRAM_SLOW
+PSRAM_TIMEOFFSET = 11 ' I guess???
+#else
+PSRAM_TIMEOFFSET = 8
+#endif
+
+PRI exmem_start() | tmp,cogs,banks
+
+ifnot exmem_struct
+  exmem_struct := c.malloc(8*4+8*4+32*4)
+tmp := exmem_struct
+cogs := tmp+8*4
+banks := cogs+8*4
+
+if exmem_cog
+  return
+
+long[tmp][0] := clkfreq
+#ifdef USE_HYPER
+long[tmp][1] := (HYPER_SYNC_CLOCK?0:1)<<exmem.UNREGCLK_BIT
+long[tmp][2] := (HYPER_RESET < 32 && HYPER_RESET > 0) ? 1<<HYPER_RESET : 0
+long[tmp][3] := HYPER_RESET >= 32 ? 1<<(HYPER_RESET-32) : 0
+#elseifdef USE_PSRAM_EITHER
+long[tmp][1] := (PSRAM_SYNC_CLOCK?0:1)<<exmem.UNREGCLK_BIT
+#ifdef USE_PSRAM_SLOW
+long[tmp][1] |= 1<<exmem.SLOWCLK_BIT | 1<<exmem.CLKSEL_BIT
+#endif
+long[tmp][2] := 0
+long[tmp][3] := 0 
+
+if PSRAM_BANKS > 1
+  pinh((PSRAM_SELECT+1) addpins (PSRAM_BANKS-2))
+#endif
+
+#ifdef USE_PSRAM_EITHER
+long[tmp][4] := PSRAM_BASE
+#elseifdef USE_HYPER
+long[tmp][4] := HYPER_BASE
+#endif
+long[tmp][5] := banks
+long[tmp][6] := cogs
+long[tmp][7] := @exmem_mailbox[0]
+
+long[cogs][0]:=-1<<16 + %1_111<<12
+longfill(cogs+4,-1<<16,7)
+longfill(banks,negx,32)
+
+#ifdef USE_PSRAM16
+long[banks][0] := 512<<16 + (PSRAM_DELAY-PSRAM_TIMEOFFSET)<<13 + (PSRAM_SYNC_DATA?0:1)<<12 + 22
+long[banks][16] := PSRAM_SELECT + PSRAM_CLK<<8
+#elseifdef USE_PSRAM8
+long[banks][0] := 256<<16 + (PSRAM_DELAY-PSRAM_TIMEOFFSET)<<13 + (PSRAM_SYNC_DATA?0:1)<<12 + 22
+long[banks][16] := PSRAM_SELECT + PSRAM_CLK<<8
+#elseifdef USE_PSRAM4
+long[banks][0] := 128<<16 + (PSRAM_DELAY-PSRAM_TIMEOFFSET)<<13 + (PSRAM_SYNC_DATA?0:1)<<12 + 22
+long[banks][16] := PSRAM_SELECT + PSRAM_CLK<<8 + PSRAM_SELECT<<16
+#elseifdef USE_HYPER
+long[banks][0] := 128<<16 + (HYPER_DELAY-7)<<13 + (HYPER_SYNC_DATA?0:1)<<12 + 22
+long[banks][16] := HYPER_SELECT + HYPER_CLK<<8 + HYPER_RWDS<<16 + HYPER_LATENCY<<25 ' Latency????
+#endif
+
+exmem_mailbox[0] := -1
+cogs := exmem.getDriverAddr()
+exmem_cog := coginit(COGEXEC_NEW,cogs,tmp)+1
+repeat while exmem_mailbox[0] ' wait for init so data structures can go dead
+
+PRI exmem_stop()
+if exmem_cog
+  exmem_sync()
+  cogstop((exmem_cog\0)-1)
+
+PRI exmem_sync()
+repeat while exmem_mailbox[0]
+
+PRI exmem_write(dst,src,length,async)
+exmem_sync()
+exmem_mailbox[2] := length
+exmem_mailbox[1] := src
+exmem_mailbox[0] := exmem.R_WRITEBURST + (dst & $fffffff)
+ifnot async
+  exmem_sync()
+
+PRI exmem_fill(dst,val,length,async)
+exmem_sync()
+exmem_mailbox[2] := length
+exmem_mailbox[1] := val
+exmem_mailbox[0] := exmem.R_WRITEBYTE + (dst & $fffffff)
+ifnot async
+  exmem_sync()
+
+PRI exmem_read(dst,src,length,async)
+exmem_sync()
+exmem_mailbox[2] := length
+exmem_mailbox[1] := dst
+exmem_mailbox[0] := exmem.R_READBURST + (src & $fffffff)
+ifnot async
+  exmem_sync()
+
+DAT
+
+testfont    file "FUNSCII.DAT"
+
+mainpal
+            ' color 1 omitted
+            long $C8C8C8_00
+            long $606060_00
+            long $303030_00
+            long $E8C818_00
+            long $685808_00
+            long $48F030_00
+            long $0000B8_00
+            long $000000_00
+            long $000000_00
+            long $000000_00
+            long $000000_00
+            long $000000_00
+            long $000000_00
+            long $FFFFFF_00
+
+logopal1
+            long $FF0000_00
+            long $800000_00
+            long $C80000_00
+            long $FFFF00_00
+            long $806400_00
+            long $C7B600_00
+            long $2828FF_00
+            long $000080_00
+            long $0000C8_00
+            long $00FF00_00
+            long $008000_00
+            long $00C800_00
+            long $000000_00
+            long $000000_00
+            long $000000_00
+logopal2
+            long $000000_00
+            long $C800F8_00
+            long $9800E8_00
+            long $6800F0_00
+            long $3000E8_00
+            long $1800C8_00
+            long $D0D068_00
+            long $FFFFFF_00
+            long $808080_00
+            long $F8C018_00
+            long $C8A020_00
+            long $187040_00
+            long $C01030_00
+            long $903800_00
+            long $782000_00
+
+dirup_icon
+            long $11111111
+            long $55566611
+            long $55455551
+            long $54445551
+            long $55455551
+            long $55444451
+            long $55555551
+            long $11111111
+folder_icon
+            long $11111111
+            long $55566611
+            long $55555551
+            long $55555551
+            long $55555551
+            long $52222251
+            long $52555251
+            long $11111111
+rom_icon
+            long $13333311
+            long $23433321
+            long $13333311
+            long $23333321
+            long $13333311
+            long $23333321
+            long $13333311
+            long $11111111
+music_icon
+            long $11111771
+            long $11177871
+            long $11781171
+            long $11781171
+            long $11787781
+            long $77817781
+            long $77811111
+            long $11111111
+
+
+logotiles_row1
+            ' M top row
+            long $00000220
+            long $00000220
+            long $00002112
+            long $00002112
+            long $00021111
+            long $00021111
+            long $00211121
+            long $00211321
+
+            long $00002200
+            long $00002200
+            long $00021120
+            long $00211112
+            long $22111113
+            long $22111113
+            long $11111211
+            long $11113211
+
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $20000000
+            long $20000000
+            long $32000000
+            long $32000000
+
+            ' I top row
+            long $00000550
+            long $00005445
+            long $00054465
+            long $00054465
+            long $00054450
+            long $00544650
+            long $00544650
+            long $00544500
+
+            ' S top row
+            long $00000088
+            long $00000877
+            long $00008777
+            long $00087779
+            long $00087778
+            long $00087777
+            long $00008777
+            long $00000877
+
+            long $88880000
+            long $77778000
+            long $77798000
+            long $88998000
+            long $00880000
+            long $80000000
+            long $78000000
+            long $77800000
+
+            ' O top row
+            long $00000BBB
+            long $0000BAAA
+            long $000BAAAA
+            long $00BAAACC
+            long $00BAACBB
+            long $00BAAB00
+            long $0BAACB00
+            long $0BAACB00
+
+            long $BB000000
+            long $AABB0000
+            long $AAAAB000
+            long $AAAAB000
+            long $BAAACB00
+            long $0BAACB00
+            long $0BAAB000
+            long $0BACB000
+
+            ' Y top row
+            long $11100000
+            long $17210000
+            long $12210000
+            long $01221001
+            long $01331001
+            long $00133113
+            long $00137113
+            long $00014444
+
+            long $01110000
+            long $12210000
+            long $12210000
+            long $27100000
+            long $33100000
+            long $31000000
+            long $31000000
+            long $10000000
+
+            ' U top row
+            long $11110001
+            long $12210001
+            long $17210001
+            long $12210001
+            long $13310001
+            long $13310001
+            long $13710001
+            long $14410001
+
+            long $11100000
+            long $22100000
+            long $22100000
+            long $22100000
+            long $37100000
+            long $33100000
+            long $33100000
+            long $44100000
+
+            ' M top row
+            long $11100000
+            long $12210000
+            long $12710000
+            long $12221000
+            long $13331000
+            long $13333101
+            long $13733101
+            long $14444414
+
+            long $00111000
+            long $01221000
+            long $01221000
+            long $12221000
+            long $17331000
+            long $33331000
+            long $33371000
+            long $44441000
+
+            ' E top row
+            long $11111111
+            long $12722222
+            long $12222272
+            long $12211111
+            long $13310000
+            long $13310000
+            long $17311111
+            long $14444444
+
+            long $10000000
+            long $10000000
+            long $10000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $10000000
+
+logotiles_row2
+            ' M top row
+            long $00211202
+            long $02113202
+            long $02113200
+            long $02113200
+            long $02132000
+            long $21132000
+            long $21132000
+            long $02220000
+
+            long $11132211
+            long $11320021
+            long $21320021
+            long $23200002
+            long $02000002
+            long $00000000
+            long $00000000
+            long $00000000
+
+            long $13200000
+            long $13200000
+            long $11320000
+            long $11320000
+            long $11132000
+            long $21132000
+            long $23320000
+            long $02200000
+
+            ' I bottom row
+            long $05446500
+            long $05446500
+            long $05445000
+            long $54465000
+            long $54465000
+            long $54450000
+            long $54650000
+            long $05500000
+
+            ' S bottom row
+            long $00000087
+            long $00000008
+            long $00000008
+            long $00000087
+            long $08800877
+            long $87788779
+            long $87777998
+            long $08888880
+
+            long $77780000
+            long $77980000
+            long $77980000
+            long $77980000
+            long $79800000
+            long $98000000
+            long $80000000
+            long $00000000
+
+            ' O bottom row
+            long $0BACB000
+            long $0BACB000
+            long $BAAAB000
+            long $BAAAABBB
+            long $0BAAAAAA
+            long $0BAAAAAA
+            long $00BCCCCC
+            long $0000BBBB
+
+            long $BAACB000
+            long $BAACB000
+            long $BAAB0000
+            long $AACB0000
+            long $AACB0000
+            long $ACB00000
+            long $CB000000
+            long $B0000000
+
+            ' Y bottom row
+            long $00014447
+            long $00001441
+            long $00001551
+            long $00001551
+            long $00001551
+            long $00001761
+            long $00001661
+            long $00001111
+
+            long $10000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+
+            ' U bottom row
+            long $14410001
+            long $14441014
+            long $17551015
+            long $01551015
+            long $01555175
+            long $01666666
+            long $00166666
+            long $00011111
+
+            long $44100000
+            long $47100000
+            long $55100000
+            long $51000000
+            long $51000000
+            long $61000000
+            long $10000000
+            long $00000000
+
+            ' M bottom row
+            long $14414414
+            long $14411333
+            long $17511333
+            long $15510131
+            long $15510131
+            long $16610010
+            long $16610010
+            long $11110000
+
+            long $41441000
+            long $11441000
+            long $11551000
+            long $01751000
+            long $01551000
+            long $01661000
+            long $01661000
+            long $01111000
+
+            ' E bottom row
+            long $14444744
+            long $14411111
+            long $15510000
+            long $17510000
+            long $15511111
+            long $16666666
+            long $16676666
+            long $11111111
+
+            long $10000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $10000000
+            long $10000000
+            long $10000000
+            
+bowltiles
+            ' row 1 left
+            long $00000000
+            long $00009999
+            long $00998888
+            long $99888888
+            long $88ABCAFF
+            long $AAAAAAAA
+            long $AACAABAA
+            long $99AAAAAA
+            ' row 1 right
+            long $000000EF
+            long $9999FE00
+            long $88FFE900
+            long $FF8E8899
+            long $CAEBAC88
+            long $AEAAAAAA
+            long $BACABAAC
+            long $AAAAAA99
+            ' row 2 left
+            long $D899CABA
+            long $8D8D9999
+            long $88D8D8D8
+            long $98888D8D
+            long $09888888
+            long $00988888
+            long $00099888
+            long $00000999
+            ' row 2 right
+            long $CABA998D
+            long $9999D8D8
+            long $8D8D8D88
+            long $D8D88889
+            long $88888890
+            long $88888900
+            long $88899000
+            long $99900000
+            ' edge tile row 1
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000099
+            long $00000098
+            long $00000099
+            long $00000098
+            ' edge tile row 1
+            long $00000098
+            long $0000009D
+            long $00000009
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            ' omg wtf
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $00000000
+            long $000000E0

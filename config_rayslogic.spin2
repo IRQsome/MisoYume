@@ -1,0 +1,172 @@
+OBJ vconst = "MegaVGA_ohmyshit.spin2"
+CON
+
+'' This can be defined to skip game selection
+'#define DIRECT_BOOT "/sd/MEGAYUME/SONIC2.BIN"
+
+'' Allow $FC000 parameter passing.
+USE_ARGV = true
+
+'' if ROM supports both overseas 60Hz (USA) or domestic 60Hz (Japan) regions, this decides which one to use.
+'' (50Hz overseas is always the third choice)
+PREFER_OVERSEAS = true
+
+'' Wether holding Down+Start or Up+Start should quit/reset
+INBAND_RESET = true
+
+' Enable one of these to select the exmem type to use
+'#define USE_PSRAM16
+#define USE_PSRAM8
+'#define USE_PSRAM4
+'#define USE_HYPER
+
+' For PSRAM (either type)
+PSRAM_CLK = 30 addpins 1
+PSRAM_SELECT = 28
+PSRAM_BASE = 32
+PSRAM_BANKS = 2 ' Only used to stop further banks from interfering
+
+PSRAM_WAIT  = 5
+PSRAM_DELAY = 16
+PSRAM_SYNC_CLOCK = false
+PSRAM_SYNC_DATA = false
+
+' Uncomment for slower memory clock
+#define USE_PSRAM_SLOW
+
+' For HyperRAM
+HYPER_ACCESSORY = 32 ' Base pin for P2EVAL HyperRAM board
+HYPER_CLK    =  8+HYPER_ACCESSORY
+HYPER_RWDS   = 10+HYPER_ACCESSORY
+HYPER_SELECT = 12+HYPER_ACCESSORY
+HYPER_BASE   =  0+HYPER_ACCESSORY
+HYPER_RESET  = 15+HYPER_ACCESSORY
+
+HYPER_LATENCY = 6
+HYPER_WAIT  = HYPER_LATENCY*4 - 2
+HYPER_DELAY = 13
+HYPER_SYNC_CLOCK = false
+HYPER_SYNC_DATA = false
+
+
+SDCARD_CLK = 55
+SDCARD_SELECT = 57
+SDCARD_DI = 56
+SDCARD_DO = 54
+
+'{
+VIDEO_MODE = vconst.MODE_VGA2X
+VIDEO_SUBMODE = 0
+
+VGA_BASEPIN = 8
+VGA_VSYNC   = VGA_BASEPIN + 4
+'}
+
+{
+VIDEO_MODE = vconst.MODE_COMPOSITE
+VIDEO_SUBMODE = vconst.SUBMODE_NTSC
+
+VGA_BASEPIN = 24
+VGA_VSYNC   = 0
+'}
+{
+VIDEO_MODE = vconst.MODE_HDMI
+VIDEO_SUBMODE = 0
+
+VGA_BASEPIN = 32
+VGA_VSYNC   = 0
+'}
+
+{
+VIDEO_MODE = vconst.MODE_LCD6
+VIDEO_SUBMODE = vconst.LCD_ILI9342
+VGA_BASEPIN = 0
+VGA_VSYNC = (8<<0) + (9<<8) + (10<<16) + (11<<24)
+'}
+
+AUDIO_LEFT  = 8+6
+AUDIO_RIGHT = AUDIO_LEFT + 1
+
+'' Uncomment ONLY ONE of the below
+#define INPUT_USE_USB
+'#define INPUT_USE_PINS
+
+
+'' USB Keyboard/gamepad pins.
+USB0_BASEPIN = 16
+ENABLE_PIN   = 1              ' USB object enables port voltage protection
+DM_PIN       = 2              ' Add to BASEPIN
+
+
+'' Discrete pin inputs
+' For active-low buttons: P_HIGH_15K | P_LOW_15K | P_INVERT_A
+' For active-high buttons: P_HIGH_15K | P_LOW_15K | P_INVERT_OUTPUT
+PINPUT_PINMODE = P_HIGH_15K | P_LOW_15K | P_INVERT_OUTPUT
+PINPUT_DRIVE = true
+
+' Set -1 if button not present
+PINPUT_P1_UP     = 12
+PINPUT_P1_DOWN   = 13
+PINPUT_P1_LEFT   = 14
+PINPUT_P1_RIGHT  = 15
+PINPUT_P1_A      = 6
+PINPUT_P1_B      = 7
+PINPUT_P1_C      = 5
+PINPUT_P1_START  = 4
+PINPUT_P1_X      = -1
+PINPUT_P1_Y      = -1
+PINPUT_P1_Z      = -1
+PINPUT_P1_MODE   = -1
+
+PINPUT_P2_UP     = -1
+PINPUT_P2_DOWN   = -1
+PINPUT_P2_LEFT   = -1
+PINPUT_P2_RIGHT  = -1
+PINPUT_P2_A      = -1
+PINPUT_P2_B      = -1
+PINPUT_P2_C      = -1
+PINPUT_P2_START  = -1
+PINPUT_P2_X      = -1
+PINPUT_P2_Y      = -1
+PINPUT_P2_Z      = -1
+PINPUT_P2_MODE   = -1
+
+PINPUT_P3_UP     = -1
+PINPUT_P3_DOWN   = -1
+PINPUT_P3_LEFT   = -1
+PINPUT_P3_RIGHT  = -1
+PINPUT_P3_A      = -1
+PINPUT_P3_B      = -1
+PINPUT_P3_C      = -1
+PINPUT_P3_START  = -1
+PINPUT_P3_X      = -1
+PINPUT_P3_Y      = -1
+PINPUT_P3_Z      = -1
+PINPUT_P3_MODE   = -1
+
+PINPUT_P4_UP     = -1
+PINPUT_P4_DOWN   = -1
+PINPUT_P4_LEFT   = -1
+PINPUT_P4_RIGHT  = -1
+PINPUT_P4_A      = -1
+PINPUT_P4_B      = -1
+PINPUT_P4_C      = -1
+PINPUT_P4_START  = -1
+PINPUT_P4_X      = -1
+PINPUT_P4_Y      = -1
+PINPUT_P4_Z      = -1
+PINPUT_P4_MODE   = -1
+
+
+
+'' Ignore stuff below
+
+#ifdef USE_PSRAM4
+#define USE_PSRAM_EITHER
+#endif
+#ifdef USE_PSRAM8
+#define USE_PSRAM_EITHER
+#endif
+#ifdef USE_PSRAM16
+#define USE_PSRAM_EITHER
+#endif
