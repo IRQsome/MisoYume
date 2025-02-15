@@ -16,11 +16,13 @@ Incomplete and dubiously accurate compatibility list...
 |Game                     |Test version|Status|
 |:------------------------|:----------:|:-----|
 |ActRaiser                |beta 06     |**Broken** (SPC timing)|
+|Breath of Fire 2         |beta 06     |Works|
 |Bust-A-Move              |beta 06     |Works|
 |Castlevania Dracula X    |beta 06     |Works|
 |Contra 3                 |beta 06     |**Broken**|
 |Chrono Trigger           |beta 06     |**Broken**|
 |Demon's Crest            |beta 06     |Works(?)|
+|Donkey Kong Country      |beta 06     |**Very glitched graphics**|
 |Earthbound               |beta 06     |Works(?)|
 |Final Fantasy III        |beta 06     |**Broken** (SPC timing?)|
 |Final Fight              |beta 06     |Works|
@@ -39,7 +41,11 @@ Incomplete and dubiously accurate compatibility list...
 |Pocky & Rocky 2          |beta 06     |**Broken-ish** (SPC timin?)|
 |RPM Racing               |beta 06     |sometimes(?) broken sprites, high-res mode only partially implemented|
 |Rock n' Roll Racing      |beta 06     |Works|
+|Super Aleste             |beta 06     |Works|
 |Samurai Shodown          |beta 06     |Works (but play the NeoGeo version instead, seriously)|
+|Soul Blazer              |beta 06     |**Broken** (SPC timing)|
+|Super Buster Bros.       |beta 06     |Works|
+|Sim City                 |beta 06     |**Graphics corruption**|
 |Sim City 2000            |beta 06     |Works|
 |Super Castlevania IV     |beta 06     |Works|
 |Super Ghouls & Ghosts    |beta 06     |Works|
@@ -47,6 +53,7 @@ Incomplete and dubiously accurate compatibility list...
 |Super Mario World        |beta 06     |Works|
 |Secret of Evermore       |beta 06     |Works|
 |Secret of Mana           |beta 06     |**Broken**|
+|Street Racer             |beta 06     |**Glitchy graphics**|
 |Super Tetris 2 + Bombliss|beta 06     |Minor graphics issue (missing overscan mode)|
 |Tetris Attack            |beta 06     |**Broken**|
 |Trials of Mana           |beta 06     |Works|
