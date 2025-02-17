@@ -22,7 +22,7 @@ Incomplete and dubiously accurate compatibility list...
 |Contra 3                 |beta 06     |**Broken**|
 |Chrono Trigger           |beta 06     |**Broken**|
 |Demon's Crest            |beta 06     |Works(?)|
-|Donkey Kong Country      |beta 06     |**Very glitched graphics**|
+|Donkey Kong Country      |beta 07     |Works(?)|
 |Earthbound               |beta 06     |Works(?)|
 |Final Fantasy III        |beta 06     |**Broken** (SPC timing?)|
 |Final Fight              |beta 06     |Works|
@@ -48,14 +48,14 @@ Incomplete and dubiously accurate compatibility list...
 |Sim City                 |beta 06     |**Graphics corruption**|
 |Sim City 2000            |beta 06     |Works|
 |Super Castlevania IV     |beta 06     |Works|
-|Super Ghouls & Ghosts    |beta 06     |Works|
+|Super Ghouls & Ghosts    |beta 07     |Works|
 |Super Metroid            |beta 06     |**Crashes during escape sequence**|
 |Super Mario World        |beta 06     |Works|
 |Secret of Evermore       |beta 06     |Works|
-|Secret of Mana           |beta 06     |**Broken**|
-|Street Racer             |beta 06     |**Glitchy graphics**|
+|Secret of Mana           |beta 07     |**Broken**|
+|Street Racer             |beta 07     |**Glitchy graphics**|
 |Super Tetris 2 + Bombliss|beta 06     |Minor graphics issue (missing overscan mode)|
-|Tetris Attack            |beta 06     |**Broken**|
+|Tetris Attack            |beta 07     |**Broken**|
 |Trials of Mana           |beta 06     |Works|
 |Tales of Phantasia       |beta 06     |**Broken** (SPC timing)|
 |Wild Guns                |beta 06     |**Broken** (hangs going in-game)|
