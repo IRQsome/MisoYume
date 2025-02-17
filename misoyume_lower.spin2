@@ -1387,7 +1387,7 @@ rk_dma_suboff res 1
 
 
 rk_ppu_vmain_vmadd  res 1 ' PPU registers stored here for speed
-rk_ppu_oamadd_oamlatch res 1 ' OAMADD still needs to be mirrored to hub
+rk_ppu_oamadd_oamlatch res 1 ' internal OAMADD counter -> sometimes auto-resets
 
 'rk_debugpc    res 1
 
@@ -2399,11 +2399,7 @@ rk_hub_eoltasks
         if_z  bitl rk_interrupt_flags,#8
         if_z  call #rk_hub_hdma_init
               cmp rk_curline,#225 wz
-        if_z  call #rk_do_autoread
-        if_z  bith rk_interrupt_flags,#8 ' NMI pending
-        if_z  setbyte rk_hdmaen,#0,#0 ' kill HDMA
-              testb rk_interrupt_flags,#7 andz ' NMI enabled?
-        if_z  bith rk_interrupt_flags,#31 ' trigger NMI
+        if_z  call #rk_vblank_tasks
               tjs rk_mdmaen,#rk_hub_mdma_start ' continue hdma
 
 .pause        rdbyte pa,#upper_command wcz
@@ -2749,7 +2745,17 @@ rk_write_nvram_romsel
               ret wcz
 
 
-rk_do_autoread
+rk_vblank_tasks
+              bith rk_interrupt_flags,#8 ' NMI pending
+              setbyte rk_hdmaen,#0,#0 ' kill HDMA
+              testb rk_interrupt_flags,#7 wz ' NMI enabled?
+        if_z  bith rk_interrupt_flags,#31 ' trigger NMI
+
+              rdbyte pa,#ppu_inidisp wc ' C = forced blank, do not reset OAM address
+              rdword pa,#ppu_oamadd
+        if_nc setword rk_ppu_oamadd_oamlatch,pa,#0
+
+              ' Do joypad auto-read
               testb rk_interrupt_flags,#0 wc ' auto-read flag
         if_nc ret wcz
               call #rk_latchjoy
@@ -3340,7 +3346,7 @@ ppu_write_oamdata
               add rk_ppu_oamadd_oamlatch,#1
               bitl rk_ppu_oamadd_oamlatch,#10 addbits 5
               
-              wrword rk_ppu_oamadd_oamlatch,#ppu_oamadd
+              'wrword rk_ppu_oamadd_oamlatch,#ppu_oamadd
       if_z    jmp #.hi
       if_nc   ret wcz
               rolbyte rk_memv,rk_ppu_oamadd_oamlatch,#2
