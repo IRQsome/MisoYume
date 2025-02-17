@@ -15,6 +15,8 @@ CON
   TIME_COMPOSITE = false
   TIME_CMATH = false
 
+  SHOW_PALETTE = false
+
   DRAM_REFRESH_START = 538
 
   'DEBUG_TIMESTAMP = TRUE
@@ -611,8 +613,8 @@ rk_rasterirq
               mov rk_optmp1,#$FE
               testb rk_flags,#RK_IRQ_BIT wc
         if_nc jmp #rk_doirq
-              bitl rk_interrupt_flags,#24 wcz
-        if_c  call rk_readcode_f
+              bitl rk_interrupt_flags,#24 wcz ' Check WAI flag
+        if_c  call rk_readcode_f ' Not sure why I wrote this here?
               jmp #rk_nextop
 
 rk_vblanknmi
@@ -620,7 +622,7 @@ rk_vblanknmi
         if_c  jmp #rk_nextop:nmidelay
               bitl rk_interrupt_flags,#31
               mov rk_optmp1,#$FA
-              debug("NMI at ",uhex_long(rk_pc))
+              debug("NMI at ",uhex_long(rk_pc),udec(rk_curline))
               jmp #rk_doirq
 
 rk_time  long 0
@@ -628,7 +630,7 @@ rk_eol
               getct pa
               subr rk_time,pa
               'rdlong pb,#video_line_ctr wc
-              debug("scanline end ",udec(rk_time,rk_curline))
+              'debug("scanline end ",udec(rk_time,rk_curline))
 .wait         rdlong pa,#video_line_ctr wc
          if_c add pa,#262
               cmp rk_curline,pa wz
@@ -1745,7 +1747,7 @@ rk_dobranch   ' rk_memv has branch offset
               add ptrb,rk_memv
         if_nc cmps ptrb,rk_codequeloc wc ' C if before que region
         if_nc ret ' If not before or after que, just leave, otherwise fall through
-              debug("A slow branch ",sdec(rk_memv,rk_romque_left),uhex_long(ptrb))
+              'debug("A slow branch ",sdec(rk_memv,rk_romque_left),uhex_long(ptrb))
 
 rk_dojump     ' rk_pc has new PC
               ' Note that there's a case where we call this mid-opcode, don't do anything stupid
@@ -1759,7 +1761,7 @@ rk_romexchk_overlay_end
               'debug("fast jump ",uhex_long(rk_pc))
               mov rk_readcode_f,#rk_readcode_romque
 rk_romque_reload
-              debug("romque reload ",uhex_long(rk_pc))
+              'debug("romque reload ",uhex_long(rk_pc))
               testb rk_pc,#23 wz
         if_z  sets rk_readcode_romque:addcycles,rk_rom_speed
         if_nz sets rk_readcode_romque:addcycles,#8
@@ -2750,6 +2752,7 @@ rk_vblank_tasks
               setbyte rk_hdmaen,#0,#0 ' kill HDMA
               testb rk_interrupt_flags,#7 wz ' NMI enabled?
         if_z  bith rk_interrupt_flags,#31 ' trigger NMI
+        if_z  bitl rk_interrupt_flags,#24 ' and clear WAI flag
 
               rdbyte pa,#ppu_inidisp wc ' C = forced blank, do not reset OAM address
               rdword pa,#ppu_oamadd
@@ -2972,11 +2975,12 @@ rk_write_memsel
               
 
 rk_write_mdmaen
-              'debug("MDMAEN write ",uhex_byte(rk_memv),uhex_long(rk_pc))
+              debug("MDMAEN ",uhex_byte(rk_memv),uhex_long(rk_pc),udec(rk_curline))
               or rk_mdmaen,rk_memv
               ret wcz
 
 rk_write_hdmaen
+              debug("HDMAEN ",uhex_long(rk_pc,rk_hdmaen),uhex_byte(rk_memv),udec(rk_curline))
               setbyte rk_hdmaen,rk_memv,#1
               cmp rk_curline,#225 wc
         if_b  or rk_hdmaen,rk_memv ' set internal active flags - horrible glitch but Super Ghouls and Ghosts needs it
@@ -3069,7 +3073,7 @@ rk_write_vtimeh
               ret wcz
 
 rk_hub_wai
-              debug("WAI instruction")
+              debug("WAI ",udec(rk_curline))
               ' IRQ/NMI on this scanline?
               bitl rk_interrupt_flags,#24
               cmps rk_until_irq,rk_until_eol wc
@@ -6948,20 +6952,22 @@ end
               wrlong ppm_pxbuffer,ptra++
               mov ppm_pxbuffer+0,ppm_pxbuffer+128 ' move extra pixel for hires
 
+        if SHOW_PALETTE
+              setq2 #255
+              wrlong 0,ptra++
+        else
+
               call ppm_loopfunc
               setq #127
               wrlong ppm_pxbuffer,ptra++
               mov ppm_pxbuffer+0,ppm_pxbuffer+128 ' move extra pixel for hires
-
 
               'debug(uhex_long(ppm_odddat,ppm_evendat))
 
               call ppm_loopfunc
               setq #127
               wrlong ppm_pxbuffer,ptra++
-
-              'setq2 #255 ' DEBUG
-              'wrlong 0,ptra++   ' DEBUG
+        end
 
               ' 271 cycles palette load
               ' 188+ spent in setup
