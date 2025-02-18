@@ -26,6 +26,7 @@ CON
 
   MAX_INIT = 64
 
+
   WIDTH = 512
   WIDTH_ALT = 256 ' Not used in MisoYume
 
@@ -93,10 +94,10 @@ case mode
       SUBMODE_TMDS_700x480: timing := @timing_tmds_700x480
       SUBMODE_TMDS_748x480: timing := @timing_tmds_748x480
       other: timing := @timing_tmds_640x480
-  MODE_LCD6:
-    cmode := @cmode_lcd6
-    initf := @init_ili9342
-    timing := @timing_lcd6_320x240
+  'MODE_LCD6:
+  '  cmode := @cmode_lcd6
+  '  initf := @init_ili9342
+  '  timing := @timing_lcd6_320x240
   other:
     abort -1
 
@@ -1669,12 +1670,6 @@ util_sdtvcommon
               mov hsync_bpshort,hsync_bp
               sub hsync_bpshort,hsync_breeze
               sub hsync_bpshort,hsync_burst
-              mov vsync_half,blankline
-              add vsync_half,hsync_bp
-              add vsync_half,hsync_tip
-              add vsync_half,hsync_fp
-              shr vsync_half,#1
-              sub vsync_half,hsync_tip
               mov hsync_func,#hsync_ntsc
               mov vbi_hsync_func,#hsync_ntsc
 
@@ -1706,8 +1701,8 @@ util_setactive_extra_special
               or borderline,pa
               cmp extra_pillar,#0 wz
         if_nz or extra_pillar,pa
-              tjz nco_main,#.softscan
 
+              tjz nco_main,#.softscan
               cmp nco_alt,#0 wz
         if_z  mov altline_func,##line_native_altpillar ' Use pillarboxing if no alt NCO set
               or altres_pillar,pa
