@@ -1,8 +1,8 @@
-OBJ vconst = "MegaVGA_ohmyshit.spin2"
+OBJ vconst = "MisoVGA.spin2"
 CON
 
 '' This can be defined to skip game selection
-'#define DIRECT_BOOT "/sd/MISOYUME/PRCKYU.BIN"
+'#define DIRECT_BOOT "/sd/MISOYUME/DKCUC.SFC"
 
 '' Allow $FC000 parameter passing.
 USE_ARGV = true
@@ -54,9 +54,9 @@ SDCARD_SELECT = 60
 SDCARD_DI = 59
 SDCARD_DO = 58
 
-'{ ' NEW NEW NEW
+'{ ' New video driver config
 VIDEO_MODE = vconst.MODE_HDMI
-VIDEO_SUBMODE = vconst.SUBMODE_TMDS_560x480
+VIDEO_SUBMODE = vconst.SUBMODE_TMDS_748x480
 
 ANALOG_BASEPIN = 24
 VSYNC_PIN = 24+4
@@ -64,35 +64,6 @@ DIGITAL_BASEPIN = 32 ' MUST be -1 if not present
 DIGITAL_REVERSED = false
 '}
 
-{
-VIDEO_MODE = vconst.MODE_VGA2X
-VIDEO_SUBMODE = 0
-
-VGA_BASEPIN = 24
-VGA_VSYNC   = VGA_BASEPIN + 4
-'}
-
-{
-VIDEO_MODE = vconst.MODE_COMPOSITE
-VIDEO_SUBMODE = vconst.SUBMODE_NTSC
-
-VGA_BASEPIN = 24
-VGA_VSYNC   = 0
-'}
-{
-VIDEO_MODE = vconst.MODE_HDMI
-VIDEO_SUBMODE = 0
-
-VGA_BASEPIN = 32
-VGA_VSYNC   = 0
-'}
-
-{
-VIDEO_MODE = vconst.MODE_LCD6
-VIDEO_SUBMODE = vconst.LCD_ILI9342
-VGA_BASEPIN = 0
-VGA_VSYNC = (8<<0) + (9<<8) + (10<<16) + (11<<24)
-'}
 
 AUDIO_LEFT  = 24+6
 AUDIO_RIGHT = AUDIO_LEFT + 1
