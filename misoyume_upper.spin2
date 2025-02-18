@@ -44,7 +44,7 @@ ATTR_DIAG = 256 + 2<<10
 
 OBJ
 
-video: "MegaVGA_ohmyshit"
+video: "MisoVGA"
 
 usb : "usbnew" | ACTIVITY_LED = -1, ERROR_LED = -1, USB_BASE_PIN = USB0_BASEPIN, USB_ENABLE_OFFSET = ENABLE_PIN, USB_DMINUS_OFFSET = DM_PIN, ...
                  OVERLAP_MEMORY = true,  ...
@@ -106,8 +106,9 @@ menu_ppu_init()
 msgbox_simple(@"oomf")
 
 ' setup video driver
-video.start($F8,$80000,long[$20],VIDEO_MODE,VGA_BASEPIN,VGA_VSYNC,VIDEO_SUBMODE)
+'video.start($F8,$80000,long[$20],VIDEO_MODE,VGA_BASEPIN,VGA_VSYNC,VIDEO_SUBMODE)
   ' MEGA HACK: MODE POINTER is $80000
+video.start(ANALOG_BASEPIN&63 + (DIGITAL_BASEPIN&63)<<8 + (DIGITAL_REVERSED?64<<8:0),VSYNC_PIN,VIDEO_MODE,VIDEO_SUBMODE,long[$20],0,2,$F8,$80000,video.CLK_MULTIPLIER*3*4*6*6)
 
 ppr_cog := coginit(COGEXEC_NEW,long[$24],0)
 ppc_cog := coginit(HUBEXEC_NEW,long[$28],0)
