@@ -7385,6 +7385,10 @@ dsp_dosample
               add pb,0-0
               wypin pa,dsp_lpin
               wypin pb,dsp_rpin
+              setword pa,dsp_lsample,#0
+              setword pa,dsp_rsample,#1
+              cmp dsp_dpin,#0 wc
+        if_nc wxpin pa,dsp_dpin
 dsp_run_ptch  jmp #\dsp_run
 
 
@@ -7816,6 +7820,7 @@ sp_firmbase   long @spc_firmware - $FFC0 ' patched by start
 sp_statbase   long @apu_status ' patched by start
 dsp_lpin      long AUDIO_LEFT ' patched by start
 dsp_rpin      long AUDIO_RIGHT ' patched by start
+dsp_dpin      long DIGITAL_BASEPIN ' patched by start
 
 dsp_rateremap byte
 ' To facilitate faster timer checks
