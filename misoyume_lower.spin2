@@ -7387,7 +7387,7 @@ dsp_dosample
               wypin pb,dsp_rpin
               setword pa,dsp_lsample,#0
               setword pa,dsp_rsample,#1
-              cmp dsp_dpin,#0 wc
+              cmps dsp_dpin,#0 wc
         if_nc wxpin pa,dsp_dpin
 dsp_run_ptch  jmp #\dsp_run
 
