@@ -631,10 +631,6 @@ rk_eol
               subr rk_time,pa
               'rdlong pb,#video_line_ctr wc
               'debug("scanline end ",udec(rk_time,rk_curline))
-.wait         rdlong pa,#video_line_ctr wc
-         if_c add pa,#262
-              cmp rk_curline,pa wz
-        if_z  jmp #.wait
               jmp #rk_hub_eoltasks
 
 rk_start_hdma
@@ -642,6 +638,19 @@ rk_start_hdma
               mov rk_until_hdma,rk_10000
               test rk_hdmaen,#$FF wz
         if_nz call #rk_hub_do_hdma
+              jmp #rk_nextop
+
+
+rk_scansync
+              mov rk_until_scansync,rk_10000
+              mov pb, rk_curline
+              decmod pb,#261
+.wait         rdlong pa,#video_line_ctr wc
+         if_c add pa,#262
+              cmp pb,pa wz
+        if_z  jmp #.wait
+              ret ' return to rk_nextop or other caller
+
 rk_nextop
               'debug(udec(rk_cycles))
               'call #rk_validate
@@ -651,10 +660,12 @@ rk_nextop
               sub rk_until_eol,rk_cycles
               sub rk_until_irq,rk_cycles
               sub rk_until_hdma,rk_cycles
+              sub rk_until_scansync,rk_cycles
               mov rk_cycles, #0
 
               tjs rk_until_eol,#rk_eol
               tjs rk_until_hdma,#rk_start_hdma
+              tjs rk_until_scansync,#rk_scansync
               tjnz rk_mdmaen,rk_start_mdma_ptr
               tjs rk_interrupt_flags,#rk_vblanknmi
 .nmidelay
@@ -1324,6 +1335,7 @@ rk_elapsed    res 1
 ' Hiroari shot a strange bird and it fell on the RESTORE key
 rk_until_eol  res 1
 rk_until_hdma  res 1
+rk_until_scansync res 1
 rk_until_irq  res 1
 
 rk_curline    res 1
@@ -2392,9 +2404,11 @@ rk_hub_eoltasks
 .irqoff
 
               mov rk_until_hdma,##1112 - 40 ' -1 to account for activating on negative numbers
+              mov rk_until_scansync,#88
               ' TODO: WHY DOES THIS MAKE IT WORSE? Check instruction cycle counts
-              'add rk_until_hdma,rk_until_eol ' account for cycle drift
-              'add rk_until_irq,rk_until_eol ' account for cycle drift
+              add rk_until_hdma,rk_until_eol ' account for cycle drift
+              add rk_until_irq,rk_until_eol ' account for cycle drift
+              add rk_until_scansync,rk_until_eol
               add rk_until_eol,##1364 - 000 - 40 '' - 40 to account for DRAM refresh
 
               cmp rk_curline,#0 wz
@@ -2443,7 +2457,8 @@ rk_hub_do_hdma
               add rk_elapsed,rk_cycles
               sub rk_until_eol,rk_cycles
               sub rk_until_irq,rk_cycles
-              sub rk_until_hdma,rk_cycles
+              sub rk_until_hdma,rk_cycles ' Do we need this here? This is the HDMA section.
+              sub rk_until_scansync,rk_cycles ' ^^
               mov rk_cycles,#0
               wrlong rk_elapsed,#elapsed_cycles
 
@@ -2644,6 +2659,8 @@ rk_hub_mdma_start
               sub rk_until_eol,rk_cycles
               sub rk_until_irq,rk_cycles
               sub rk_until_hdma,rk_cycles
+              subs rk_until_scansync,rk_cycles wc
+        if_c  call #rk_scansync
               mov rk_cycles,#0
               wrlong rk_elapsed,#elapsed_cycles
               tjs rk_until_eol,#.eol
@@ -2678,6 +2695,8 @@ rk_hub_mdma_start
               sub rk_until_eol,rk_cycles
               sub rk_until_irq,rk_cycles
               sub rk_until_hdma,rk_cycles
+              subs rk_until_scansync,rk_cycles wc
+        if_c  call #rk_scansync
               mov rk_cycles,#0
               tjs rk_until_eol,#.eol
 
@@ -2953,7 +2972,7 @@ rk_read_hvbjoy
         if_ae cmpr rk_curline,#225+3 wc
               testbn rk_interrupt_flags,#0 orc ' check auto-read enable flag
               bitnc rk_openbus,#0 ' TODO: joypad read flag
-              cmp rk_until_eol,#330 wc ' TODO: confirm real hblank timing
+              cmp rk_until_eol,#268 wc ' TODO: confirm real hblank timing
               bitc rk_openbus,#6
               ' Actually MEGA TODO: I think there's a problem here wherein the rendering for a scanline
               ' is supposed to start 88 cycles into the logical scanline
@@ -3083,6 +3102,8 @@ rk_hub_wai
 
               bith rk_interrupt_flags,#24
               ' skip the entire scanline lol
+              cmps rk_until_scansync,rk_until_eol wc
+        if_b  call #rk_scansync
               cmps rk_until_hdma,rk_until_eol wc
         if_b  add rk_cycles,rk_until_hdma
         if_b  sub rk_until_eol,rk_cycles
