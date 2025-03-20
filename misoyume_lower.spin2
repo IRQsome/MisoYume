@@ -5009,7 +5009,7 @@ ppr_do_mode7
         if_0x loc pa,#@pprovl_mode7_wrapping
         if_10 loc pa,#@pprovl_mode7_transparent
         if_11 loc pa,#@pprovl_mode7_tile0
-        '}
+              '}
          'loc pa,#@pprovl_mode7_wrapping
 
               setq #ppr_ovlend - ppr_ovlbuf - 1
@@ -5036,7 +5036,7 @@ ppr_do_mode7
               bitc ppr_tmp2,#10 addbits 7
               ' origin X
               getword ppr_m7x,ppr_m7xy,#0
-              shl ppr_m7x,#8
+              muls ppr_m7x,#256 ' left shift by 8 and sign extend
               getword pa,ppr_m7a,#1 ' get B
               muls pa,ppr_curychk
               andn pa,#63
@@ -5051,7 +5051,7 @@ ppr_do_mode7
               add ppr_m7x,pa
               ' origin Y
               getword ppr_m7y,ppr_m7xy,#1
-              shl ppr_m7y,#8
+              muls ppr_m7y,#256 ' left shift by 8 and sign extend
               getword pa,ppr_m7c,#1 ' get D
               muls pa,ppr_curychk
               andn pa,#63
@@ -5089,8 +5089,8 @@ ppr_do_mode7
               mov ppr_pptr,#3 ' first pixel is garbolium
 
 
-              altsb ppr_curychk,#ppr_pixelbuffer
-              setbyte #255
+              'altsb ppr_curychk,#ppr_pixelbuffer
+              'setbyte #255
 
               call #ppr_ovlbuf
                
