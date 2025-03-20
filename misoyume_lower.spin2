@@ -682,13 +682,13 @@ rk_nextop
          'if_b jmp #.yesdebug
               'cmp rk_sp,#0 wcz
          'if_z jmp #.yesdebug
-              'cmp rk_pc,##$0000_8E8E wcz
-         'f_nz jmp #.nodebug
+              'cmp rk_pc,##$0087_8391 wcz
+        'if_nz jmp #.nodebug
               'cmpr rk_pc,##$00_8E49 wc
         'if_b cmp rk_pc,##$00_8E9C wc
         'if_ae jmp #.nodebug
 .yesdebug
-              'debug("PC: ",uhex_long_(rk_pc), " PSW: ",ubin_byte_(rk_flags), " E: ",udec_(rk_emumode),uhex_long(rk_debugpc),uhex_word_array(#work_ram+$0440,#1))
+              'debug("PC: ",uhex_long_(rk_pc), " PSW: ",ubin_byte_(rk_flags), " E: ",udec_(rk_emumode){,uhex_long(rk_debugpc)},uhex_word_array(#work_ram+$0440,#1))
               'debug("SP: ",uhex_word_(rk_sp)," DP: ",uhex_word_(rk_dp)," DB: ",uhex_long_(rk_dbank))
               'debug("A: ",uhex_word_(rk_accu)," X: ",uhex_word_(rk_x)," Y: ",uhex_word_(rk_y))
               'long 0[3]
@@ -2770,7 +2770,7 @@ rk_vblank_tasks
               bith rk_interrupt_flags,#8 ' NMI pending
               setbyte rk_hdmaen,#0,#0 ' kill HDMA
               testb rk_interrupt_flags,#7 wz ' NMI enabled?
-        if_z  bith rk_interrupt_flags,#31 ' trigger NMI
+        if_z  bith rk_interrupt_flags,#30 addbits 1 ' trigger NMI
         if_z  bitl rk_interrupt_flags,#24 ' and clear WAI flag
 
               rdbyte pa,#ppu_inidisp wc ' C = forced blank, do not reset OAM address
@@ -2979,7 +2979,7 @@ rk_read_hvbjoy
               ' So correct hblank timing would be 268,
               ' but we need to consider the extra cycles where the PPU can be changed
               ' This also means all IRQ timings are off
-              cmp rk_curline,#$F0 wc ' TODO: use actual vblank flag
+              cmp rk_curline,#225 wc ' TODO: use actual vblank flag
               bitnc rk_openbus,#7
               getbyte rk_memv,rk_openbus,#0
               'debug("HVBJOY read ",uhex_byte(rk_memv),uhex_long(rk_pc))
