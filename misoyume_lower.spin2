@@ -2972,13 +2972,15 @@ rk_read_hvbjoy
         if_ae cmpr rk_curline,#225+3 wc
               testbn rk_interrupt_flags,#0 orc ' check auto-read enable flag
               bitnc rk_openbus,#0 ' TODO: joypad read flag
-              cmp rk_until_eol,#268 wc ' TODO: confirm real hblank timing
+              cmp rk_until_eol,#268 wc ' front porch TODO: confirm real hblank timing
+        if_nc cmp rk_until_scansync,#511 wc ' Also set during back porch
               bitc rk_openbus,#6
               ' Actually MEGA TODO: I think there's a problem here wherein the rendering for a scanline
               ' is supposed to start 88 cycles into the logical scanline
               ' So correct hblank timing would be 268,
               ' but we need to consider the extra cycles where the PPU can be changed
               ' This also means all IRQ timings are off
+              ' THIS IS PRELIMINARILY FIXED BY SCANSYNC CHANGES
               cmp rk_curline,#225 wc ' TODO: use actual vblank flag
               bitnc rk_openbus,#7
               getbyte rk_memv,rk_openbus,#0
