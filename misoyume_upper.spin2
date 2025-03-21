@@ -1,7 +1,7 @@
 '' MisoYume - Souper NES emulator
 '' [beta version]
 
-BETAVER = 08
+BETAVER = 09
 
 #include "commondef.spin2"
 #include "config.spin2"
