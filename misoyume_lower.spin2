@@ -1534,7 +1534,7 @@ rk_write_romsel
 
               mov rk_memtmp2,rk_ea
 rk_writerom_overlay
-              long 0[4]
+              long 0[7]
 rk_writerom_overlay_end
 
               ret wcz
@@ -1998,7 +1998,7 @@ rkovl_writeexp_nope
 
 
               org rk_readrom_overlay
-rkovl_readrom_lorom_nvram
+rkovl_readrom_lorom_nvram_half
               shl rk_memtmp2,#1
               setword rk_memtmp2,rk_memtmp1,#1
               and rk_memtmp1,#$7F
@@ -2010,19 +2010,49 @@ rkovl_readrom_lorom_nvram
               long 0[rk_readrom_overlay_end-$]
 
               org rk_writerom_overlay
-rkovl_writerom_lorom_nvram
+rkovl_writerom_lorom_nvram_half
+              shl rk_memtmp2,#1
+              setword rk_memtmp2,rk_memtmp1,#1
               and rk_memtmp1,#$7F
               cmp rk_memtmp1,#$70 wc
               testb rk_ea,#15 orc
+              shr rk_memtmp2,#1
         if_nc jmp #rk_write_nvram_romsel
               long 0[rk_writerom_overlay_end-$]
 
               org rk_romexchk_overlay
-rkovl_romexchk_lorom_nvram
+rkovl_romexchk_lorom_nvram_half
               and rk_memtmp1,#$7F
               cmp rk_memtmp1,#$70 wc
         if_c  cmpr rk_memtmp1,#$3F wc
               testb rk_ea,#15 orc
+              long 0[rk_romexchk_overlay_end-$]
+
+
+              org rk_readrom_overlay
+rkovl_readrom_lorom_nvram_full
+              shl rk_memtmp2,#1
+              setword rk_memtmp2,rk_memtmp1,#1
+              and rk_memtmp1,#$7F
+              cmp rk_memtmp1,#$70 wc
+              shr rk_memtmp2,#1
+        if_nc jmp #rk_read_nvram_romsel
+              zerox rk_memtmp2,rk_rom_zerox
+              long 0[rk_readrom_overlay_end-$]
+
+              org rk_writerom_overlay
+rkovl_writerom_lorom_nvram_full
+              and rk_memtmp1,#$7F
+              cmp rk_memtmp1,#$70 wc
+        if_nc jmp #rk_write_nvram_romsel
+              long 0[rk_writerom_overlay_end-$]
+
+              org rk_romexchk_overlay
+rkovl_romexchk_lorom_nvram_full
+              testb rk_pc,#22 wc
+              testb rk_pc,#15 orc
+              and rk_memtmp1,#$7F
+        if_c  cmp rk_memtmp1,#$70 wc
               long 0[rk_romexchk_overlay_end-$]
 
 
@@ -2045,7 +2075,8 @@ rkovl_writeexp_hirom_nvram
 
 rkovL_readrom_table
 wordfit @rkovl_readrom_lorom
-wordfit @rkovl_readrom_lorom_nvram
+wordfit @rkovl_readrom_lorom_nvram_half
+wordfit @rkovl_readrom_lorom_nvram_full
 wordfit @rkovl_readrom_hirom
 wordfit @rkovl_readrom_hirom
 wordfit @rkovl_readrom_exhirom
@@ -2054,7 +2085,8 @@ wordfit @rkovl_readrom_exhirom
 
 rkovL_writerom_table
 wordfit @rkovl_writerom_nope
-wordfit @rkovl_writerom_lorom_nvram
+wordfit @rkovl_writerom_lorom_nvram_half
+wordfit @rkovl_writerom_lorom_nvram_full
 wordfit @rkovl_writerom_nope
 wordfit @rkovl_writerom_nope
 wordfit @rkovl_writerom_nope
@@ -2062,13 +2094,15 @@ wordfit @rkovl_writerom_nope
 
 rkovl_romexchk_table
 wordfit @rkovl_romexchk_generic
-wordfit @rkovl_romexchk_lorom_nvram
+wordfit @rkovl_romexchk_lorom_nvram_half
+wordfit @rkovl_romexchk_lorom_nvram_full
 wordfit @rkovl_romexchk_generic
 wordfit @rkovl_romexchk_generic
 wordfit @rkovl_romexchk_generic
 wordfit @rkovl_romexchk_generic
 
 rkovl_romextran_table
+wordfit @rkovl_romextran_lorom
 wordfit @rkovl_romextran_lorom
 wordfit @rkovl_romextran_lorom
 wordfit @rkovl_romextran_hirom
@@ -2080,6 +2114,7 @@ rkovl_readexp_table
 wordfit @rkovl_readexp_nope
 wordfit @rkovl_readexp_nope
 wordfit @rkovl_readexp_nope
+wordfit @rkovl_readexp_nope
 wordfit @rkovl_readexp_hirom_nvram
 wordfit @rkovl_readexp_nope
 wordfit @rkovl_readexp_hirom_nvram
@@ -2088,11 +2123,13 @@ rkovl_writeexp_table
 wordfit @rkovl_writeexp_nope
 wordfit @rkovl_writeexp_nope
 wordfit @rkovl_writeexp_nope
+wordfit @rkovl_writeexp_nope
 wordfit @rkovl_writeexp_hirom_nvram
 wordfit @rkovl_writeexp_nope
 wordfit @rkovl_writeexp_hirom_nvram
 
 rkovl_bankbound_table ' LoROM has breaks on 32K boundaries, (Ex)HiROM on 64K
+wordfit 14
 wordfit 14
 wordfit 14
 wordfit 15

@@ -360,7 +360,7 @@ repeat
             putstring(romheader ? @"Has Header" : @"No Header",INFO_X,INFO_Y+1,$0000,ATTR_BLACK)
 
             case rommapper
-              MAPPER_LOROM, MAPPER_LOROM_NVRAM:
+              MAPPER_LOROM, MAPPER_LOROM_NVRAM_HALF,MAPPER_LOROM_NVRAM_FULL:
                 c.strncpy(@tmppath,@"LoROM",MAX_PATH)
               MAPPER_HIROM, MAPPER_HIROM_NVRAM:
                 c.strncpy(@tmppath,@"HiROM",MAX_PATH)
@@ -369,8 +369,14 @@ repeat
               other:
                 c.strncpy(@tmppath,@"???",MAX_PATH)
             case rommapper
-              MAPPER_LOROM_NVRAM,MAPPER_HIROM_NVRAM,MAPPER_EXHIROM_NVRAM:
+              MAPPER_LOROM_NVRAM_HALF,MAPPER_LOROM_NVRAM_FULL,MAPPER_HIROM_NVRAM,MAPPER_EXHIROM_NVRAM:
                 c.strncat(@tmppath,sram_is_nvram?@"+NVRAM":@"+RAM",MAX_PATH)
+            case rommapper
+              MAPPER_LOROM_NVRAM_HALF:
+                c.strncat(@tmppath,@"(H)",MAX_PATH)
+              MAPPER_LOROM_NVRAM_FULL:
+                c.strncat(@tmppath,@"(F)",MAX_PATH)
+            
 
             putstring(@tmppath,INFO_X,INFO_Y+2,$0000,ATTR_BLACK)
 
@@ -690,7 +696,10 @@ print(1,11,tmp,0)
 case maptype
   0: ' LoROM
     if haveram
-      rommapper := MAPPER_LOROM_NVRAM
+      if romsize > $20_0000 || savesize > 32768
+        rommapper := MAPPER_LOROM_NVRAM_HALF
+      else
+        rommapper := MAPPER_LOROM_NVRAM_FULL
     else
       rommapper := MAPPER_LOROM
   1: ' HiROM
