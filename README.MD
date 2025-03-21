@@ -54,7 +54,7 @@ Incomplete and dubiously accurate compatibility list...
 |Super Mario World        |beta 06     |Works|
 |Secret of Evermore       |beta 06     |Works|
 |Secret of Mana           |beta 09     |**Broken sound + glitchy Mode 7**|
-|Street Racer             |beta 07     |**Glitchy graphics**|
+|Street Racer             |beta 09     |**Options menu sometimes hangs**, glitchy scanline in 2 player mode|
 |Super Tetris 2 + Bombliss|beta 06     |Minor graphics issue (missing overscan mode)|
 |Tetris Attack            |beta 07     |**Broken**|
 |Trials of Mana           |beta 06     |Works|
