@@ -42,6 +42,8 @@ CON
 
   VDPR_OFFSET = 4 ' lines that rendering has to run ahead
 
+  LCD6_HALFWIDTH = true ' Software downscaling for LCD6
+
 PUB start(pins,extrapins,mode,submode,buffer,extrastride,buflines,linectr,vdpmode,audio_mb_period) : cogn | cmode,timing,initf,stride
 
 case mode
@@ -94,10 +96,10 @@ case mode
       SUBMODE_TMDS_700x480: timing := @timing_tmds_700x480
       SUBMODE_TMDS_748x480: timing := @timing_tmds_748x480
       other: timing := @timing_tmds_640x480
-  'MODE_LCD6:
-  '  cmode := @cmode_lcd6
-  '  initf := @init_ili9342
-  '  timing := @timing_lcd6_320x240
+  MODE_LCD6:
+    cmode := @cmode_lcd6
+    initf := @init_ili9342
+    timing := @timing_lcd6_320x240
   other:
     abort -1
 
@@ -365,12 +367,12 @@ long 2              ' Guard Bands (HDMI only - subtracts from H.BP)
 timing_lcd6_320x240 '' TODO broken for 512px
 long VIDEO_CLKFREQ  ' CLKFREQ
 long 1              ' active line multiplier
-long 3              ' V front porch
+long 4              ' V front porch
 long 9              ' V sync
-long 12             ' V back porch
-long 0              ' extra pillar
+long 9              ' V back porch
+long 32*3           ' extra pillar
 long 320*3          ' blank line
-long 5*3            ' H front porch
+long 10*3           ' H front porch
 long 15*3           ' H sync
 long 59*3           ' H back porch
 long $071c71c8      ' Sync NCO
@@ -581,6 +583,7 @@ temp2 res 1
 temp3 res 1
 temp4 res 1
 scantmp res 1
+scantmp2 res 1
 
 spleft res 1
 spright res 1
@@ -1269,6 +1272,15 @@ lcd_overlay
 lcd6_mask     long $FCFCFC00
 
 scanfunc_lcd6_rgb24
+        if LCD6_HALFWIDTH
+              setpiv #$80
+              rflong scantmp
+              rflong scantmp2
+              blnpix scantmp,scantmp2
+              and scantmp,lcd6_mask
+              shr scantmp,#8
+        _ret_ xcont pixel_multiplier,scantmp
+        else
               rflong scantmp
               and scantmp,lcd6_mask
               shr scantmp,#8
@@ -1277,6 +1289,7 @@ scanfunc_lcd6_rgb24
               and scantmp,lcd6_mask
               shr scantmp,#8
         _ret_ xcont pixel_multiplier,scantmp
+        end
 
 hsync_lcd6_vbi
               ' just to refresh the clock pin
@@ -1722,7 +1735,7 @@ util_setactive_extra_special
 '        _ret_ mov altline_func,#line_soft2x_alt
 
 init_ili9342 ' 6-bit digital LCD interface
-            '' TODO
+            
             ' load the overlay
             loc pa,#@lcd_overlay
             setq #495-video_ovl_area

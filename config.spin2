@@ -60,6 +60,15 @@ DIGITAL_BASEPIN = 32 ' MUST be -1 if not present
 DIGITAL_REVERSED = false
 '}
 
+{
+VIDEO_MODE = vconst.MODE_LCD6
+VIDEO_SUBMODE = 0 ' Not used (yet)
+
+ANALOG_BASEPIN = -1 ' Not used
+VSYNC_PIN = (8<<0) + (9<<8) + (10<<16) + (11<<24) ' extra pins: DOTCLK<<0 + CS<<8 + CLK<<16 + SDA<<24
+DIGITAL_BASEPIN = 0 ' HSync, VSync and 6 data pins
+DIGITAL_REVERSED = false ' Not used
+'}
 
 AUDIO_LEFT  = 24+6
 AUDIO_RIGHT = AUDIO_LEFT + 1
