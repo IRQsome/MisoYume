@@ -85,7 +85,7 @@ long srmfile,savesize
 
 long selection
 
-byte romheader,rommapper
+byte extraheader,rommapper,romtype_from_header
 
 byte ppr_cog,ppc_cog,ppm_cog,cpu_cog,exmem_cog,spc_cog
 byte got_parameter,sram_is_nvram
@@ -357,7 +357,7 @@ repeat
             detect_rom()
             c.sprintf(@tmppath,@"Size: %d",romsize)
             putstring(@tmppath,INFO_X,INFO_Y+0,$0000,ATTR_BLACK)
-            putstring(romheader ? @"Has Header" : @"No Header",INFO_X,INFO_Y+1,$0000,ATTR_BLACK)
+            putstring(extraheader ? @"Has Ext.Header" : @"No Ext.Header",INFO_X,INFO_Y+1,$0000,ATTR_BLACK)
 
             case rommapper
               MAPPER_LOROM, MAPPER_LOROM_NVRAM_HALF,MAPPER_LOROM_NVRAM_FULL:
@@ -380,13 +380,20 @@ repeat
 
             putstring(@tmppath,INFO_X,INFO_Y+2,$0000,ATTR_BLACK)
 
-            putstring(@"Title:",INFO_X,INFO_Y+3,$0000,ATTR_BLACK)
+            case romtype_from_header>>4
+              $2: tmp:=@"SlowROM"
+              $3: tmp:=@"FastROM"
+              other: tmp:=@"???"
+
+            putstring(tmp,INFO_X,INFO_Y+3,$0000,ATTR_BLACK)
+
+            putstring(@"Title:",INFO_X,INFO_Y+4,$0000,ATTR_BLACK)
             bytemove(@tmppath,@romheader_buffer[$10],14)
             tmppath[14] := 0
-            putstring(@tmppath,INFO_X,INFO_Y+4,$0000,ATTR_BLACK)
+            putstring(@tmppath,INFO_X,INFO_Y+5,$0000,ATTR_BLACK)
             bytemove(@tmppath,@romheader_buffer[$10+14],7)
             tmppath[7] := 0
-            putstring(@tmppath,INFO_X,INFO_Y+5,$0000,ATTR_BLACK)
+            putstring(@tmppath,INFO_X,INFO_Y+6,$0000,ATTR_BLACK)
 
 
   'settile($0000,0,0,"0"+ATTR_PAL2<<11)
@@ -625,20 +632,20 @@ c.fseek(romfile,0,c.SEEK_END)
 romsize := c.ftell(romfile)
 if romsize & 512
   romsize -= 512
-  romheader := 1
+  extraheader := 1
 else
-  romheader := 0
+  extraheader := 0
   
 if romsize > $7FFF
-  c.fseek(romfile,$7FB0+(romheader?512:0),c.SEEK_SET)
+  c.fseek(romfile,$7FB0+(extraheader?512:0),c.SEEK_SET)
   c.fread(@romheader_buffer,80,1,romfile)
   score_lo := score_header(@romheader_buffer,$20)
 if romsize > $FFFF
-  c.fseek(romfile,$FFB0+(romheader?512:0),c.SEEK_SET)
+  c.fseek(romfile,$FFB0+(extraheader?512:0),c.SEEK_SET)
   c.fread(@romheader_buffer,80,1,romfile)
   score_hi := score_header(@romheader_buffer,$21)
 if romsize > $40FFFF
-  c.fseek(romfile,$40FFB0+(romheader?512:0),c.SEEK_SET)
+  c.fseek(romfile,$40FFB0+(extraheader?512:0),c.SEEK_SET)
   c.fread(@romheader_buffer,80,1,romfile)
   score_exhi := score_header(@romheader_buffer,$25)
 
@@ -661,12 +668,12 @@ print(1,6,tmp,0)
 c.sprintf(tmp,@"ExHiROM score: %d",score_exhi)
 print(1,7,tmp,0)
 
-c.sprintf(tmp,@"%08X",lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(romheader?512:0))
+c.sprintf(tmp,@"%08X",lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(extraheader?512:0))
 print(1,8,tmp,0)
 }
 
 ' okay, load back actual header
-c.fseek(romfile,lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(romheader?512:0),c.SEEK_SET)
+c.fseek(romfile,lookupz(maptype: $7FB0,$FFB0,$40FFB0)+(extraheader?512:0),c.SEEK_SET)
 c.fread(@romheader_buffer,80,1,romfile)
 
 {
@@ -675,6 +682,8 @@ print(1,9,tmp,0)
 c.sprintf(tmp,@"ROM zx: %2d RAM zx: %2d",encod(romsize-1),romheader_buffer[$28]+9)
 print(1,10,tmp,0)
 }
+
+romtype_from_header := romheader_buffer[$25]
 
 haveram  := (%0110110 >> (romheader_buffer[$26]&$F)) & 1
 havebatt := (%0100100 >> (romheader_buffer[$26]&$F)) & 1
@@ -747,14 +756,14 @@ msgbox_simple(@"Loading ROM...")
 '' TODO verify that this actually works for all mirroring etc
 loadptr := 0
 loadsize := romsize
-c.fseek(romfile,romheader?512:0,c.SEEK_SET)
+c.fseek(romfile,extraheader?512:0,c.SEEK_SET)
 mirrorsize := decod(encod(loadsize-1)+1)
 repeat mirrorsize >> 15
   update_bar(loadptr,mirrorsize)
   if loadsize <= 0
     loadsize := decod(encod(mirrorsize-loadptr))
-    c.fseek(romfile,loadsize*2 + (romheader?512:0),c.SEEK_SET)
-    'c.printf(string("seeking %08X",10),loadsize*2 + (romheader?512:0))
+    c.fseek(romfile,loadsize*2 + (extraheader?512:0),c.SEEK_SET)
+    'c.printf(string("seeking %08X",10),loadsize*2 + (extraheader?512:0))
   c.fread(RKRAM_BASE,32768,1,romfile)
   exmem_write(loadptr,RKRAM_BASE,32768,false)
   'c.printf(string("%08X %08X",10),loadptr,loadsize)
