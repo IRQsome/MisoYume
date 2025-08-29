@@ -2749,9 +2749,11 @@ if 1 ' NEW DMA CODE
               fles pa,rk_until_hdma
               fles pa,rk_until_scansync
               sub  pa,rk_cycles
+              add  pa,#1 ' events happen at -1
               fges pa,#0
-              add  pa,#7 ' DMA byte takes 8 cycles
+              add  pa,#7 ' DMA byte takes 8 cycles, so round up
               shr  pa,#3 ' ^ 
+              'debug(udec(pa),sdec_(rk_until_eol,rk_until_hdma,rk_until_scansync))
               fle rk_dma_length,pa
 
               debug("MDMA ",udec(rk_dma_length))
@@ -6594,7 +6596,7 @@ ppc_bg2_tmask  long 0[4]
 ppc_bg3_tmask  long 0[4]
 
 ppc_bgptr long 0
-ppc_sprptr long ppc_spr << 19
+'ppc_sprptr long ppc_spr << 19
 ppc_sprpptr long ppc_sprp << 19
 ppc_bg4buf_increment long ppc_bg4buffer + (1<<9)
 
