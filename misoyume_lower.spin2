@@ -602,7 +602,7 @@ DAT ' RiKore Ricoh 5A22 (65816+DMA) cog resident code
 rk_cogcode
  
               ' Do one-shot dma
-rk_start_mdma_ptr long rk_hub_mdma_start
+rk_start_mdma_ptr long rk_hub_mdma
 
 rk_rasterirq
               '' TODO handle masking correctly
@@ -1392,11 +1392,13 @@ rk_addsub_f   res 1
 rk_dp_penalty res 1
 rk_xy_penalty res 1
 
-rk_dmainc     ' alias
+rk_dmainc     ' alias (old dma code)
+rk_dma_length ' alias
 rk_rwtmp      res 1
 
 rk_dma_bbptr  res 2
 rk_dma_suboff res 1
+rk_dma_romsel_skip res 1
 
 
 rk_ppu_vmain_vmadd  res 1 ' PPU registers stored here for speed
@@ -1578,6 +1580,8 @@ rk_readrom_overlay_end
               setbyte rk_openbus,rk_memv,#0
               ret wcz
 
+rk_psram_readburst_b
+              wrfast #0,pb
 rk_psram_readburst
 #ifdef USE_PSRAM_EITHER
               'debug("rk_psram_readburst ",uhex_long(pa,rk_romio_length))
@@ -1922,6 +1926,31 @@ rk_flagsloaded '... or here!
 rk_wai
               jmp #rk_hub_wai
 
+'' (M)DMA inner loops stored in LUT to reduce branch penalties
+rk_dma_writelp
+.loop
+.hubop        rdbyte rk_memv,ptrb ' <- patch this for inc/dec/fill
+              altgw rk_dma_suboff,#rk_dma_bbptr
+              getword pa
+              incmod rk_dma_suboff,#3
+              call pa
+              add rk_cycles,#8
+              add rk_elapsed,#8
+              wrlong rk_elapsed,#elapsed_cycles
+        _ret_ djnz rk_dma_length,#.loop
+
+rk_dma_readlp
+.loop
+              altgw rk_dma_suboff,#rk_dma_bbptr
+              getword pa
+              incmod rk_dma_suboff,#3
+              call pa
+.hubop        wrbyte rk_memv,ptrb ' <- patch this for inc/dec/fill
+              add rk_cycles,#8
+              add rk_elapsed,#8
+              wrlong rk_elapsed,#elapsed_cycles
+        _ret_ djnz rk_dma_length,#.loop
+
               fit 1024
 
 DAT ' RiKore 65816 ROMSEL mapper overlays
@@ -2136,6 +2165,7 @@ wordfit 15
 wordfit 15
 wordfit 15
 
+' Don't forget to visit rkovl_dma_romsel_table !!!
 
 DAT ' RiKore 65816 opcode table
 
@@ -2452,7 +2482,7 @@ rk_hub_eoltasks
         if_z  call #rk_hub_hdma_init
               cmp rk_curline,#225 wz
         if_z  call #rk_vblank_tasks
-              tjs rk_mdmaen,#rk_hub_mdma_start ' continue hdma
+              tjs rk_mdmaen,#rk_hub_mdma ' continue mdma
 
 .pause        rdbyte pa,#upper_command wcz
         if_c  jmp #rk_hub_reset
@@ -2624,8 +2654,17 @@ rk_hub_do_hdma
               push pa
               jmp #rk_read8
 
+rkovl_dma_romsel_table ' goes into rk_dma_romsel_skip
+long %1111_11_0000
+long %0000_11_0000
+long %0100_11_0000
+long %1111_11_1010
+long %1111_11_1010
+long %1111_00_1010
+long %1111_00_1010
+'' TODO: move this back down next to the code after flexsplorp #499 is fixed or I delete the old path
 
-rk_hub_mdma_start
+rk_hub_mdma
               tjs rk_mdmaen,#.continue      
               add rk_cycles,#8 ' startup overhead
 .chloop
@@ -2643,6 +2682,234 @@ rk_hub_mdma_start
               rdlong rk_optmp1,pa ' read all DMA registers
 
               'debug("MDMA start ",udec(rk_dmach),uhex_long(rk_optmp1,rk_optmp2,rk_optmp3))
+
+if 1 ' NEW DMA CODE
+
+              ' There a 6 types of DMA transfer set by D and AA bits in DMAPn (optmp3.byte[0])
+              '   A->B read forward (the most common kind)
+              '   A->B read backward (???)
+              '   A->B read fixed (for filling VRAM etc)
+              '   B->A write forward (VRAM readback, see Sim City 2000)
+              '   B->A write backward (???)
+              '   B->A write fixed (low-key useless, as DMA to I/O registers is no-op)
+              ' Note that "read" and "write" above refer to the A-bus (RAM/ROM) side
+              ' Whereas elsewhere (\/there\/) it refers to the B-bus (I/O) side
+
+              testb rk_optmp3,#7 wc ' read/write
+
+              ' Grab B-Bus function pointers
+        if_nc mov pa,#bbus_write_tbl>>9
+        if_c  mov pa,#bbus_read_tbl>>9
+              rolbyte pa,rk_optmp3,#1
+              shl pa,#1
+              setq #1
+              rdlong rk_dma_bbptr,pa
+
+              testb rk_optmp3,#0 wc
+              testb rk_optmp3,#1 wz
+        if_nz test rk_optmp3,#%111 wz
+        if_11 getword rk_dma_bbptr+1,rk_dma_bbptr+0,#1
+        if_x1 movbyts rk_dma_bbptr+0,#%%1010
+        if_x1 movbyts rk_dma_bbptr+1,#%%1010
+    if_c_ne_z mov rk_dma_bbptr+1,rk_dma_bbptr+0
+
+              debug("MDMA B-bus pointers ",uhex_reg_array(#rk_dma_bbptr,#2))
+
+              bith rk_mdmaen,#31 ' in-progress flag ON
+              add rk_elapsed,rk_cycles ' Make sure we don't loose cycles
+
+.nextpage
+
+              getword rk_dma_length,rk_optmp2,#0 ' get DASn
+              cmp rk_dma_length,#0 wz
+        if_z  mov rk_dma_length,rk_10000
+        
+              ' Self-modify read/write loop for forward/backward/fill
+              ' We have to do this in here because one of the page mappers clobbers it
+              testb rk_optmp3,#7 wc ' read/write
+        if_nc mov pb,#rk_dma_writelp:hubop - $200
+        if_c  mov pb,#rk_dma_readlp:hubop - $200
+              rdlut rk_memv,pb
+              testb rk_optmp3,#3 wz ' Z -> fill mode
+              testb rk_optmp3,#4 wc ' C -> backward mode
+        if_x1 sets rk_memv,#%110000000 ' PTRB[0]
+        if_00 sets rk_memv,#%111100001 ' PTRB++
+        if_10 sets rk_memv,#%111111111 ' PTRB--
+              wrlut rk_memv,pb
+
+              ' Find maximum DMA length we can do in one go
+              ' We assume that we can always grab a continous 256 byte page of memory
+              getbyte pa,rk_optmp1,#0
+        if_nc xor pa,#255 ' Forward vs backward bytes remaining in partial page
+              add pa,#1
+        if_nz fle rk_dma_length,pa ' Fill mode: we just do not care
+              
+              ' Find time we have left
+              mov  pa,rk_until_eol
+              fles pa,rk_until_hdma
+              fles pa,rk_until_scansync
+              sub  pa,rk_cycles
+              fges pa,#0
+              add  pa,#7 ' DMA byte takes 8 cycles
+              shr  pa,#3 ' ^ 
+              fle rk_dma_length,pa
+
+              debug("MDMA ",udec(rk_dma_length))
+              tjz rk_dma_length,#.dma_cleanup_zerolen
+              ' Set flag to know we did start a non-zero transfer
+              ' As opposed to trying a zero-length transfer with DASn=$0000
+              ' (which should be 64K! danger of confusion)
+              bith rk_mdmaen,#30
+
+              ' Decrement DASn
+              getword pa,rk_optmp2,#0
+              sub pa,rk_dma_length
+              setword rk_optmp2,pa,#0
+              ' Increment address
+              getword rk_memtmp2,rk_optmp1,#0 ' Grab origianl for the page mappers
+              getword pa,rk_optmp1,#0
+        if_nz sumc pa,rk_dma_length
+              setword rk_optmp1,pa,#0
+
+              push ptrb ' backup original ptrb value
+              push ##.dma_cleanup
+
+              ' Now find what the page belongs to
+              getbyte rk_memtmp1,rk_optmp3,#3 ' A1Bn
+              cmpr rk_memtmp1,#$7E wcz
+        if_nz cmpr rk_memtmp1,#$7F wz
+        if_z  jmp #.dmapage_wram
+
+              testb rk_memtmp1,#6 wc
+              testb rk_memtmp2,#15 orc
+        if_c  jmp #.dmapage_romsel
+
+              test rk_memtmp2,##$E000 wz
+        if_nz jmp #.dmapage_io
+              ' Fall through for low WRAM, Carry must be clear here 
+.dmapage_wram
+              mov ptrb,#@work_ram>>16
+        if_c  add ptrb,#1
+              rolword ptrb,rk_memtmp2,#0
+              testb rk_optmp3,#7 wc
+        if_nc jmp #rk_dma_writelp
+              jmp #rk_dma_readlp
+
+
+.dmapage_nvram
+              debug("In .dmapage_nvram!! Should not happen!")
+
+.dmapage_io
+              ' fall through for now
+              debug("In .dmapage_io!! Should _really_ not happen!")
+.dmapage_dummy
+              debug("In .dmapage_dummy!! Should not happen!")
+              loc ptrb,#\dma_buffer
+              testb rk_optmp3,#3 wz ' Z -> fill mode
+              testb rk_optmp3,#4 wc ' C -> backward mode
+        if_c  add ptrb,#255
+
+              testb rk_optmp3,#7 wc ' C -> read mode
+        if_c  jmp #rk_dma_readlp
+              ' For dummy write, we need to do this stupid hack
+              '  to make sure we write openbus
+              ' This is stupid code that should never run
+              mov pb,#rk_dma_writelp:hubop-$200
+              rdlut rk_memv,pb
+              sets rk_memv,#%110000000 ' PTRB[0] (effectively force fill mode)
+              wrlut rk_memv,pb
+              wrbyte rk_openbus,ptrb
+              jmp #rk_dma_writelp
+
+.dma_cleanup
+              pop ptrb ' Restore PTRB
+.dma_cleanup_zerolen
+              subs rk_until_scansync,rk_cycles wc
+        if_c  call #rk_scansync
+              sub rk_until_eol,rk_cycles
+              sub rk_until_irq,rk_cycles
+              sub rk_until_hdma,rk_cycles
+              mov rk_cycles,#0
+
+              bitl rk_mdmaen,#30 wcz ' reset non-zero flag (here to avoid skipping 64K transfers accidentally)
+              'debug("cleanup channel check ",uhex_long(rk_optmp2),ubin_long(rk_mdmaen),udec(rk_dmach),c_z())
+        if_z  test rk_optmp2,rk_ffff wz ' Did we decrement DASn to zero? Transfer over! Else: EOL or HDMA
+        if_z  bitl rk_mdmaen,rk_dmach
+        if_z  bitl rk_mdmaen,#31 ' in-progress flag OFF
+
+              cmps rk_until_eol,#0 wc
+        if_nc cmps rk_until_hdma,#0 wc
+ if_nz_and_nc jmp #.nextpage
+
+              ' Save DMA register state
+              mov pa,rk_dmach
+              mul pa,#12
+              add pa,#@rk_dmaregs
+              setq #1
+              wrlong rk_optmp1,pa
+
+  if_z_and_nc tjnz rk_mdmaen,#.chloop ' Check next channel
+        
+              jmp #rk_nextop ' Will dispatch appropriately
+
+.dmapage_romsel
+              ' enters with rk_memtmp1 = bank and rk_memtmp2 = address
+              skip rk_dma_romsel_skip
+
+              getword pa,rk_memtmp2,#0  ' All
+              shl pa,#1                ' LoROM only
+              setbyte pa,rk_memtmp1,#2 ' All
+              shr pa,#1                ' LoROM only
+
+              testb pa,#23 wz  ' ExHiROM only
+              bitnz pa,#22     ' ExHiROM only
+
+              and rk_memtmp1,#$7F      ' LoROM+NV only
+              cmp rk_memtmp1,#$70 wc   ' LoROM+NV only
+              testb rk_memtmp2,#15 orc  ' LoROM+NV(H) only
+        if_nc jmp #.dmapage_nvram      ' LoROM+NV only, must be last instr
+              ' Skip pattern must end after branch
+
+              ' Setup ROM transfer
+              testb rk_optmp3,#7 wc ' C -> read mode
+        if_c  jmp #.dmapage_dummy
+              ' Due to earlier efforts (256 byte pages), we already
+              ' know that there will not be a bank/row boundary crossing
+              ' so don't think about that here
+              loc ptrb,#\@dma_buffer
+              zerox pa,rk_rom_zerox
+              mov rk_romio_length,rk_dma_length
+
+              testb rk_optmp3,#3 wz ' Z -> fill mode
+              testb rk_optmp3,#4 wc ' C -> backward mode
+
+              ' Handle backwards transfer
+        if_10 add ptrb,rk_dma_length
+        if_10 sub ptrb,#1
+        if_10 sub pa,rk_dma_length
+        if_10 add pa,#1
+
+        if PSRAM_ASHIFT > 0 ' fixup alignments
+              mov pb,pa
+              and pb,#(1<<PSRAM_ASHIFT)-1
+              add rk_romio_length,pb
+              add rk_romio_length,#(1<<PSRAM_ASHIFT)-1
+              add ptrb,pb
+
+              shr pa,#PSRAM_ASHIFT
+              shr rk_romio_length,#PSRAM_ASHIFT
+        end
+              ' Handle fill mode
+        if_x1 mov rk_romio_length,#1 ' minimum transfer length
+
+              debug("DMA ROM read ",udec(rk_romio_length,#PSRAM_ASHIFT),uhex_long(pa,ptrb))
+              debug(uhex_long(rk_ppu_vmain_vmadd))
+
+              push ##rk_dma_writelp
+              loc pb,#\@dma_buffer
+              jmp #rk_psram_readburst_b
+
+else ' OLD DMA CODE
 
               testb rk_optmp3,#3 wz
               testb rk_optmp3,#4 wc
@@ -2771,6 +3038,7 @@ rk_hub_mdma_start
               setq #1
               wrlong rk_optmp1,rk_dmach
               jmp #rk_eol
+end
 
 
 rk_read_nvram_expansion
@@ -3202,6 +3470,9 @@ rk_hub_init
               rdlong rk_writeexp_overlay-512,pa
 
               rdword rk_bankbound,ptra[##@rkovl_bankbound_table]
+
+              shl ptra,#1
+              rdlong rk_dma_romsel_skip,ptra[##@rkovl_dma_romsel_table]
               
 
               ' PSRAM INIT
@@ -9225,9 +9496,10 @@ DAT ' stuff
               orgh
 mosaic_table        file "MOSAIC.DAT" ' weirdly sized
 
-
+alignl
 romdata_cache byte 0[32]
 romcode_que byte 0[64]
+dma_buffer byte 0[256]
 
 
               orgh $0_C000
