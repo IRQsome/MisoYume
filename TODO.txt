@@ -1,12 +1,12 @@
  - Double-check all instruction/amode timings
- - DMA optimization (!!!)
  - Strict 65816/SPC700 sync
  - ~~WAI~~ and STP instructions
  - Can't we optimize gauss table reads (only one block read?)
  - Investigate audio clicks (Super Metroid, Demon's Crest and SGNG intro tunes have some?)
  - Implement overscan and interlace bits properly
- - Investigate glitchy gradient on Dracula X map screen (appeared after code cache - mostly fixed - still misaligned)
+ - (is this still relevant?) Investigate glitchy gradient on Dracula X map screen (appeared after code cache - mostly fixed - still misaligned)
  - ~~Investigate Phalanx boot issue~~ Fixed by ???
  - ~~Investigate Super Metroid Mode7 crash~~ Done, was (d,s),y addressing mode bug
  - Investigate if Super Metroid yellow window beam effect should have trail at X=255
  - Investigate Contra 3 OAM issue
+ - Investigate why Sim City no longer has corruption
