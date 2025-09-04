@@ -15,53 +15,53 @@ Incomplete and dubiously accurate compatibility list...
 
 |Game                     |Test version|Status|
 |:------------------------|:----------:|:-----|
-|ActRaiser                |beta 06     |**Broken** (SPC timing)|
-|Breath of Fire 2         |beta 09     |**Broken** (???)|
-|Bust-A-Move              |beta 06     |Works|
-|Castlevania Dracula X    |beta 06     |Works|
-|Contra 3                 |beta 06     |**Broken**|
-|Chrono Trigger           |beta 09     |**Broken**|
-|Demon's Crest            |beta 09     |Works (glitchy text boxes)|
-|Donkey Kong Country      |beta 09     |Works(?)|
-|Earthbound               |beta 06     |Works(?)|
-|Fire Emblem: Thracia 776 |beta 09     |Works(minor graphical glitches)|
-|Final Fantasy III        |beta 06     |**Broken** (SPC timing?)|
-|Final Fight              |beta 06     |Works|
-|F-Zero                   |beta 09     |Works|
-|Harvest Moon             |beta 06     |Works|
-|Illusion of Gaia         |beta 06     |**Broken** (SPC timing)|
-|Jaki Crush               |beta 09     |Works|
-|Legend of Zelda: ALttP   |beta 06     |Works (minor graphical glitch; flashing black bar)|
-|Cotton 100%              |beta 09     |Works sometimes (leftover state?)|
-|Super Mario All-Stars    |beta 06     |Works (minor graphical glitches)|
-|Mega Man 7               |beta 06     |Works|
-|Mega Man X               |beta 06     |Works|
-|Phalanx                  |beta 09     |Works|
-|Plok!                    |beta 06     |Works|
-|Pocky & Rocky            |beta 09     |Works|
-|Pocky & Rocky 2          |beta 06     |**Broken-ish** (SPC timin?)|
-|RPM Racing               |beta 06     |sometimes(?) broken sprites, high-res mode only partially implemented|
-|Rock n' Roll Racing      |beta 06     |Works|
-|Super Aleste             |beta 06     |Works|
-|Samurai Shodown          |beta 06     |Works (but play the NeoGeo version instead, seriously)|
-|Soul Blazer              |beta 06     |**Broken** (SPC timing)|
-|Super Buster Bros.       |beta 06     |Works|
-|Sim City                 |beta 06     |**Graphics corruption**|
-|Sim City 2000            |beta 06     |Works|
-|Super Castlevania IV     |beta 06     |Works|
-|Super Ghouls & Ghosts    |beta 07     |Works|
-|Super Metroid            |beta 09     |Works(minor graphical glitch)|
-|Super Mario World        |beta 06     |Works|
-|Secret of Evermore       |beta 06     |Works|
-|Secret of Mana           |beta 09     |**Broken sound + glitchy Mode 7**|
-|Street Racer             |beta 09     |**Options menu sometimes hangs**, glitchy scanline in 2 player mode|
-|Super Tetris 2 + Bombliss|beta 06     |Minor graphics issue (missing overscan mode)|
-|Tetris Attack            |beta 07     |**Broken**|
-|Trials of Mana           |beta 06     |Works|
-|Tales of Phantasia       |beta 06     |**Broken** (SPC timing)|
-|Wild Guns                |beta 09     |**Broken** (hangs going in-game)|
-|Wolfenstein 3D           |beta 09     |Works (annoying graphical glitch)|
-|Ys 3                     |beta 09     |Works|
+|ActRaiser                |beta 11     |**Broken** (SPC timing)|
+|Breath of Fire 2         |beta 11     |**Sometimes Broken** (???)|
+|Bust-A-Move              |beta 11     |Works|
+|Castlevania Dracula X    |beta 11     |Works|
+|Contra 3                 |beta 11     |**Kinda Broken**|
+|Chrono Trigger           |beta 11     |**Broken**|
+|Demon's Crest            |beta 11     |Works (glitchy text boxes)|
+|Donkey Kong Country      |beta 11     |Works(?)|
+|Earthbound               |beta 11     |Works(?)|
+|Fire Emblem: Thracia 776 |beta 11     |Works(?)|
+|Final Fantasy III        |beta 11     |**Broken** (SPC timing?)|
+|Final Fight              |beta 11     |Works|
+|F-Zero                   |beta 11     |Works|
+|Harvest Moon             |beta 11     |Works|
+|Illusion of Gaia         |beta 11     |**Broken** (SPC timing)|
+|Jaki Crush               |beta 11     |Works|
+|Legend of Zelda: ALttP   |beta 11     |Works|
+|Cotton 100%              |beta 11     |Works sometimes (leftover state?)|
+|Super Mario All-Stars    |beta 11     |Works|
+|Mega Man 7               |beta 11     |Works|
+|Mega Man X               |beta 11     |Works|
+|Phalanx                  |beta 11     |Works|
+|Plok!                    |beta 11     |Works|
+|Pocky & Rocky            |beta 11     |Works|
+|Pocky & Rocky 2          |beta 11     |**Broken-ish** (SPC timin?)|
+|RPM Racing               |beta 11     |sometimes(?) broken sprites, high-res mode only partially implemented|
+|Rock n' Roll Racing      |beta 11     |Works|
+|Super Aleste             |beta 11     |Works|
+|Samurai Shodown          |beta 11     |Works (but play the NeoGeo version instead, seriously)|
+|Soul Blazer              |beta 11     |**Broken-ish** (SPC timing)|
+|Super Buster Bros.       |beta 11     |Works|
+|Sim City                 |beta 11     |Works|
+|Sim City 2000            |beta 11     |Works (sometimes doesn't? leftover state?)|
+|Super Castlevania IV     |beta 11     |Works|
+|Super Ghouls & Ghosts    |beta 11     |Works|
+|Super Metroid            |beta 11     |Works|
+|Super Mario World        |beta 11     |Works|
+|Secret of Evermore       |beta 11     |Works|
+|Secret of Mana           |beta 11     |**Broken sound + glitchy Mode 7**|
+|Street Racer             |beta 11     |**Options menu sometimes hangs**|
+|Super Tetris 2 + Bombliss|beta 11     |**Sometimes doesn't start**, minor graphics issue (missing overscan mode)|
+|Tetris Attack            |beta 11     |**Broken**|
+|Trials of Mana           |beta 11     |Works|
+|Tales of Phantasia       |beta 11     |**Broken** (SPC timing)|
+|Wild Guns                |beta 11     |**Broken** (hangs going in-game)|
+|Wolfenstein 3D           |beta 11     |Works|
+|Ys 3                     |beta 11     |Works|
 
 
 
