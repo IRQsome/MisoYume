@@ -410,7 +410,7 @@ long 14             ' H front porch
 long 8              ' H sync
 long 20             ' H back porch
 long $08000000      ' Sync NCO
-long $08000000>>1   ' Pixel NCO
+long $08000000      ' Pixel NCO
 long 0              ' Alt-res NCO
 long 16 + (16>>1)<<16 ' pixel clock pulses
 long 1
