@@ -4143,8 +4143,9 @@ ppu_write_cgdata
               shr rk_memv,#5
               setbyte rk_memtmp2,rk_memv,#2 ' green
               and rk_memtmp2,##$F8F8F800
-              getword ptra,ptra,#0
-              shl ptra,#1
+              'getword ptra,ptra,#0
+              'shl ptra,#1
+              mul ptra,#2 ' equivalent to above, abuse MUL masking
               'debug("palette set ",uhex_long(rk_memtmp2,ptra))
               wrlong rk_memtmp2,ptra[##@palette_current - 2] ' minus 2 to compensate for set LSB
 

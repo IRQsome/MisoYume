@@ -21,6 +21,7 @@ RKRAM_BASE = $2_0000
 SPRAM_BASE = $4_0000
 NVRAM_BASE = $5_0000
 PPUREGS = $40
+PPUREGS_SIZE = $D0-$40
 
 
 
@@ -216,8 +217,9 @@ PRI run_emulator() | tmp,did_reset,did_pause,should_pause,inband_time,inband_whi
 exmem_stop()
 waitms(500)
 bytefill(RKRAM_BASE,$FF,$20000) ' Fill 128K RAM with $FF
-bytefill(VRAM_BASE,$00,$10000) ' Fill 64K VRAM with $1337
+bytefill(VRAM_BASE,$00,$10000) ' Fill 64K VRAM with $0000
 bytefill(SPRAM_BASE,$00,$10000)
+bytefill(PPUREGS,0,PPUREGS_SIZE) ' reset all PPU regs
 byte[$D4] := 0
 coginit(HUBEXEC+spc_cog,long[$3C],$FFC0) ' force reset SPCcog
 cpu_cog := coginit(HUBEXEC_NEW,long[$1C],0)
@@ -833,6 +835,8 @@ word[VRAM_BASE][0<<5+BOWL_X+2] := $306 + 7<<10
 
 
 PRI menu_ppu_init() | tmp,i,j
+
+bytefill(PPUREGS,0,PPUREGS_SIZE)
 
 byte[PPUREGS+$08] := $01 ' BGMODE
 byte[PPUREGS+$09] := $00 ' SETINI
