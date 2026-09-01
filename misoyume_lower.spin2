@@ -2683,7 +2683,7 @@ rk_hub_mdma
 
               'debug("MDMA start ",udec(rk_dmach),uhex_long(rk_optmp1,rk_optmp2,rk_optmp3))
 
-if 1 ' NEW DMA CODE
+' NEW DMA CODE
 
               ' There a 6 types of DMA transfer set by D and AA bits in DMAPn (optmp3.byte[0])
               '   A->B read forward (the most common kind)
@@ -2911,7 +2911,8 @@ if 1 ' NEW DMA CODE
               loc pb,#\@dma_buffer
               jmp #rk_psram_readburst_b
 
-else ' OLD DMA CODE
+' OLD DMA CODE
+{
 
               testb rk_optmp3,#3 wz
               testb rk_optmp3,#4 wc
@@ -3040,7 +3041,7 @@ else ' OLD DMA CODE
               setq #1
               wrlong rk_optmp1,rk_dmach
               jmp #rk_eol
-end
+}
 
 
 rk_read_nvram_expansion
