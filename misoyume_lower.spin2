@@ -1586,7 +1586,7 @@ rk_psram_readburst_b
 rk_psram_readburst
 #ifdef USE_PSRAM_EITHER
               'debug("rk_psram_readburst ",uhex_long(pa,rk_romio_length))
-              mov rk_memtmp1,#(8+PSRAM_WAIT)<<PSRAM_CYSHL
+              mov rk_memtmp1,#(8+PSRAM_WAIT-1)<<PSRAM_CYSHL
               shl rk_romio_length,#1+PSRAM_CYSHL
               add rk_memtmp1,rk_romio_length
 
