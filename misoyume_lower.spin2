@@ -1311,6 +1311,7 @@ rk_nco_slow   long $4000_0000
 rk_nco_slow   long $4000_0000
 #endif
 
+rk_psyncio    long P_SYNC_IO
 
 rk_romcache_start long -1
 rk_romcache_end long -1
@@ -1597,9 +1598,11 @@ rk_psram_readburst
               mergeb  pa
 #ifdef USE_PSRAM_SLOW
               drvl  #PSRAM_CLK ' must be 2 ops before xinit
+#else
+              long $FC00_0000 | (PSRAM_SYNC_CLOCK ? rk_psyncio<<9 : 1<<19) | rk_psram_pinfield ' WRPIN
 #endif
-              drvh  #PSRAM_SELECT
               drvl  rk_psram_pinfield
+              drvh  #PSRAM_SELECT
               xinit rk_psram_addr_cmd,pa
               wypin rk_memtmp1,#PSRAM_CLK
               setq rk_nco_fast
@@ -1610,6 +1613,9 @@ rk_psram_readburst
               setword rk_psram_read_cmd,rk_romio_length,#0
               waitxmt
               fltl rk_psram_pinfield
+#ifndef USE_PSRAM_SLOW
+              long $FC00_0000 | (PSRAM_SYNC_DATA ? rk_psyncio<<9 : 1<<19) | rk_psram_pinfield ' WRPIN
+#endif
               setq rk_nco_slow
               xcont rk_psram_read_cmd,#0
               waitxfi
@@ -1630,8 +1636,9 @@ rk_psram_readburst
               shl pb,#8
               setbyte pa,#%101_00000,#3 ' read linear burst
               movbyts pa, #%%0123
-              drvh #HYPER_SELECT
               drvl #HYPER_BASE addpins 7
+              long $FC00_0000 | (HYPER_SYNC_CLOCK ? rk_psyncio<<9 : 1<<19) | (1<<18) | (HYPER_BASE addpins 7) ' WRPIN
+              drvh #HYPER_SELECT
               drvl #HYPER_CLK ' Init clock pin with correct (?) alignment
               xinit rk_hyper_addr_cmd1,pa
               wypin rk_memtmp1,#HYPER_CLK ' setup clock periods
@@ -1641,6 +1648,7 @@ rk_psram_readburst
               setword rk_hyper_read_cmd,rk_romio_length,#0
               waitxmt
               fltl #HYPER_BASE addpins 7
+              long $FC00_0000 | (HYPER_SYNC_DATA ? rk_psyncio<<9 : 1<<19) | (1<<18) | (HYPER_BASE addpins 7) ' WRPIN
               setq rk_nco_slow
               xcont rk_hyper_read_cmd,#0
               waitxfi
